@@ -1,0 +1,210 @@
+[package]
+name = "mqtt5-publisher"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "publisher"
+path = "src/main.rs"
+
+[dependencies]
+# Core async runtime with macros feature for #[tokio::main]
+tokio = { version = "1.44", features = ["full"] }
+
+# Retry mechanism
+backon = { version = "1.5" }
+
+# Command line argument parsing
+clap = { version = "4.5", features = ["derive", "env"] }
+
+# Logging
+log = "0.4"
+env_logger = "0.11"
+
+# uProtocol dependencies
+up-rust = "0.7.0"
+up-transport-mqtt5 = { git = "https://github.com/eclipse-uprotocol/up-transport-mqtt5-rust" }
+
+
+# [package]
+# description = "The Eclipse uProtocol MQTT 5 Transport Library"
+# edition = "2021"
+# exclude = ["tests/*", "tools/*", ".devcontainer/*", ".vscode/*", ".github/*", ".gitignore"]
+# homepage = "https://github.com/eclipse-uprotocol/up-client-mqtt5-rust"
+# keywords = ["uProtocol", "SDK", "MQTT", "MQTT5"]
+# license = "Apache-2.0"
+# name = "up-transport-mqtt5"
+# readme = "README.md"
+# repository = "https://github.com/eclipse-uprotocol/up-client-mqtt5-rust"
+# rust-version = "1.82"
+# version = "0.3.0-SNAPSHOT"
+# 
+# [lib]
+# name = "up_transport_mqtt5"
+# path = "src/lib.rs"
+# 
+# [[bin]]
+# name = "publisher"
+# path = "src/main.rs"
+# 
+# [features]
+# default = ["cli"]
+# cli = ["clap"]
+# 
+# [dependencies]
+# async-channel = { version = "1.9" }
+# async-trait = { version = "0.1" }
+# backon = { version = "1.5", default-features = false, features = ["tokio-sleep"] }
+# bytes = { version = "1.10.1" }
+# clap = { version = "4.5", optional = true, default-features = false, features = [
+#     "std",
+#     "derive",
+#     "env",
+#     "color",
+#     "help",
+#     "usage",
+#     "error-context",
+#     "suggestions",
+# ] }
+# futures = { version = "0.3" }
+# log = { version = "0.4" }
+# env_logger = { version = "0.11.8" }  # Move from dev-dependencies to dependencies
+# paho-mqtt = { version = "0.13.3", features = ["vendored-ssl"] }
+# protobuf = { version = "3.7.2" }
+# slab = { version = "0.4.11" }
+# tokio = { version = "1.44", default-features = false, features = ["rt", "rt-multi-thread", "sync", "macros"] }  # Add "macros" feature
+# up-rust = { version = "0.7.0", default-features = false }
+# 
+# [build-dependencies]
+# testcontainers = { version = "0.25.0", features = ["blocking"] }
+# 
+# [dev-dependencies]
+# mockall = { version = "0.13.1" }
+# serial_test = { version = "3.2.0" }
+# tempfile = { version = "3.20.0" }
+# test-case = { version = "3.3.1" }
+# testcontainers = { version = "0.25.0" }
+# up-rust = { version = "0.7.0", default-features = false, features = ["test-util"] }
+# 
+# [[example]]
+# name = "publisher_example"
+# required-features = ["cli"]
+# 
+# [[example]]
+# name = "subscriber_example"
+# required-features = ["cli"]
+# 
+# [package.metadata.docs.rs]
+# all-features = true
+# 
+# [package.metadata.cargo-all-features]
+# skip_optional_dependencies = true
+# max_combination_size = 3
+# 
+# [lints.rust]
+# unexpected_cfgs = { level = "warn", check-cfg = ['cfg(docker_available)'] }
+# 
+# [lints.clippy]
+# ignored_unit_patterns = "warn"
+# or_fun_call = "warn"
+# as_conversions = "warn"
+# 
+# 
+# # ################################################################################
+# # # Copyright (c) 2023 Contributors to the Eclipse Foundation
+# # #
+# # # See the NOTICE file(s) distributed with this work for additional
+# # # information regarding copyright ownership.
+# # #
+# # # This program and the accompanying materials are made available under the
+# # # terms of the Apache License Version 2.0 which is available at
+# # # https://www.apache.org/licenses/LICENSE-2.0
+# # #
+# # # SPDX-License-Identifier: Apache-2.0
+# # ################################################################################
+# # 
+# # [package]
+# # description = "The Eclipse uProtocol MQTT 5 Transport Library"
+# # edition = "2021"
+# # exclude = ["tests/*", "tools/*", ".devcontainer/*", ".vscode/*", ".github/*", ".gitignore"]
+# # homepage = "https://github.com/eclipse-uprotocol/up-client-mqtt5-rust"
+# # keywords = ["uProtocol", "SDK", "MQTT", "MQTT5"]
+# # license = "Apache-2.0"
+# # name = "up-transport-mqtt5"
+# # readme = "README.md"
+# # repository = "https://github.com/eclipse-uprotocol/up-client-mqtt5-rust"
+# # rust-version = "1.82"
+# # version = "0.3.0-SNAPSHOT"
+# # 
+# # [features]
+# # default = ["cli"]
+# # cli = ["clap"]
+# # 
+# # [dependencies]
+# # async-channel = { version = "1.9" }
+# # async-trait = { version = "0.1" }
+# # backon = { version = "1.5", default-features = false, features = ["tokio-sleep"] }
+# # bytes = { version = "1.10.1" }
+# # clap = { version = "4.5", optional = true, default-features = false, features = [
+# #     "std",
+# #     "derive",
+# #     "env",
+# #     "color",
+# #     "help",
+# #     "usage",
+# #     "error-context",
+# #     "suggestions",
+# # ] }
+# # futures = { version = "0.3" }
+# # log = { version = "0.4" }
+# # paho-mqtt = { version = "0.13.3", features = ["vendored-ssl"] }
+# # protobuf = { version = "3.7.2" }
+# # slab = { version = "0.4.11" }
+# # tokio = { version = "1.44", default-features = false, features = ["rt", "rt-multi-thread", "sync"] }
+# # up-rust = { version = "0.7.0", default-features = false }
+# # 
+# # [build-dependencies]
+# # testcontainers = { version = "0.25.0", features = ["blocking"] }
+# # 
+# # [dev-dependencies]
+# # env_logger = { version = "0.11.8" }
+# # mockall = { version = "0.13.1" }
+# # serial_test = { version = "3.2.0" }
+# # tempfile = { version = "3.20.0" }
+# # test-case = { version = "3.3.1" }
+# # testcontainers = { version = "0.25.0" }
+# # tokio = { version = "1.44.2", default-features = false, features = [
+# #     "macros",
+# #     "rt",
+# #     "signal",
+# #     "sync",
+# # ] }
+# # up-rust = { version = "0.7.0", default-features = false, features = ["test-util"] }
+# # 
+# # [[example]]
+# # name = "publisher_example"
+# # required-features = ["cli"]
+# # 
+# # [[example]]
+# # name = "subscriber_example"
+# # required-features = ["cli"]
+# # 
+# # [package.metadata.docs.rs]
+# # all-features = true
+# # 
+# # [package.metadata.cargo-all-features]
+# # # optional dependencies are activated by means of features only
+# # skip_optional_dependencies = true
+# # max_combination_size = 3
+# # 
+# # [lints.rust]
+# # # The build.rs script determines if Docker is available on the build
+# # # platform and adds the 'docker_available' cfg flag accordingly.
+# # # Tests using #[cfg(docker_available)] will then only be compiled (and run)
+# # # if Docker is actually available on the platform.
+# # unexpected_cfgs = { level = "warn", check-cfg = ['cfg(docker_available)'] }
+# # 
+# # [lints.clippy]
+# # ignored_unit_patterns = "warn"
+# # or_fun_call = "warn"
+# # as_conversions = "warn"
