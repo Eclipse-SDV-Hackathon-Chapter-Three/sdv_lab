@@ -14,11 +14,32 @@ You will have to enter your WIFI credentials (search for __WIFI_SSID__ and __WIF
 ## **zenoh-subscriber**
 
 The subscriber is a very basic uEntity which uses the up-transport-zenoh-rust library to listen for uMessages with a selected topic filter.
-You can start it with
+### You can start it with
 ```bash
-cargo run
+RUST_LOG=info cargo run
 ```
-although you might have to set RUST_LOG=info or trace to see something. Without anything sending uMessages it will not do anything. If the streamer is also running and you have flashed the threadx-rust network example onto one of the boards, you should start seeing temperatures being logged here.
+
+You might have to set RUST_LOG=info or trace to see something, without anyone sending uMessages it will not do anything. If the streamer is also running and you have flashed the threadx-rust network example onto one of the boards, you should start seeing temperatures being logged here.
+
+## **mqtt5-rust**
+
+This project provides publisher and subscriber examples as a basic uEntity which uses the up-transport-mqtt5-rust library to publish and subscribe uMessages in a specific source (both are prepared to handle multiple sources.see commented lines).
+
+### You can start it with
+
+#### publisher
+```bash
+RUST_LOG=info cargo run --bin mqtt5_publisher
+```
+
+#### subscriber
+```bash
+RUST_LOG=info cargo run --bin mqtt5_subscriber
+```
+
+You might have to set RUST_LOG=info or trace to see something, not setting the env var will not display any information in the terminal, however it will be working in the background until it's terminated.
+
+This can be used as a starting point to develop your own uEntities publisher and subscriber, as well as simulates the threadx board messages sending, once that the publisher example is hard coding the same source uURI as the threadx board ("up://threadx/A/2/8001").
 
 ## **ustreamer**
 
@@ -30,16 +51,21 @@ docker compose up
 
 and watch the streamer being pulled and started.
 
-the streamer has a fairly complex setup but the basics are already included here:
+If you are a sudo user, remember to use sudo before the docker command:
+```bash
+sudo docker compose up
+```
+
+The streamer has a fairly complex setup but the basics are already included here:
 
 #### **CONFIG.json**
 The highest level configuration file. Do not rename it as its specified like that in the entrypoint layer of the docker image.
 
-The top part of the config is pretty boring as the streamer UURI is not actually doing anything at the moment, but its looking for it anyways so it must be included.
+The top part of the config is pretty boring as the streamer uURI is not actually doing anything at the moment, but its looking for it anyways so it must be included.
 
-usubscription_config is what tracks which uentity is subscribed where, so that the streamer does not forward pub/sub messages that no one is subscribed to. If you want to forward pub/sub messages then you must always manually add them here (although in the future this will be done automatically somehow).
+usubscription_config is what tracks which uEntity is subscribed where, so that the streamer does not forward pub/sub messages that no one is subscribed to. If you want to forward pub/sub messages then you must always manually add them here (although in the future this will be done automatically somehow).
 
-The interesting parts are under the "transports" section. The streamer forwards messages based on "authority" which is the first segment of all UURIs. For each transport (for now zenoh and MQTT5) the streamer creates one "endpoint" for each authority and then creates a mapping of which authority should be forwarded to which other authority. In this example there are three endpoints: "carla", "hpc" and "threadx".
+The interesting parts are under the "transports" section. The streamer forwards messages based on "authority" which is the first segment of all uURIs. For each transport (for now zenoh and MQTT5) the streamer creates one "endpoint" for each authority and then creates a mapping of which authority should be forwarded to which other authority. In this example there are three endpoints: "carla", "hpc" and "threadx".
 The mappings are:
 - "carla_endpoint" -> "hpc_endpoint"
 - "hpc_endpoint" -> "carla_endpoint
