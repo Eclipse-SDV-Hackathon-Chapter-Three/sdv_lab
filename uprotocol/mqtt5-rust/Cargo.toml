@@ -1,11 +1,15 @@
 [package]
-name = "mqtt5-publisher"
+name = "mqtt5-examples"
 version = "0.1.0"
 edition = "2021"
-
+ 
 [[bin]]
-name = "publisher"
+name = "mqtt5_publisher"
 path = "src/publisher.rs"
+ 
+[[bin]]
+name = "mqtt5_subscriber"
+path = "src/subscriber.rs"
 
 [dependencies]
 async-trait = { version = "0.1" }

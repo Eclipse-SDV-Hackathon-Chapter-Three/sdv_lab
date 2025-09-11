@@ -1,6 +1,11 @@
 # Run the publisher
 ```bash
-RUST_LOG=info cargo run
+RUST_LOG=info cargo run --bin mqtt5_publisher
+```
+
+# Run the subscriber
+```bash
+RUST_LOG=info cargo run --bin mqtt5_subscriber
 ```
 
 # Subscribe to topic(s) using 'mosquitto_sub' and display its information following a specific format passed after -F flag
