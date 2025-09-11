@@ -20,14 +20,14 @@ use up_rust::{UListener, UMessage, UStatus, UTransport, UUri};
 use up_transport_zenoh::UPTransportZenoh;
 use zenoh::config::{Config, EndPoint};
 
-const PUB_TOPIC_AUTHORITY: &str = "threadx";
-const PUB_TOPIC_UE_ID: u32 = 0x000A;
-const PUB_TOPIC_UE_VERSION_MAJOR: u8 = 2;
-const PUB_TOPIC_RESOURCE_ID: u16 = 0x8001;
+const PUB_TOPIC_AUTHORITY: &str         = "threadx";    // "*";         // any authority (service provider)
+const PUB_TOPIC_UE_ID: u32              = 0x000A;       // 0xFFFF_FFFF; // any instance, any service
+const PUB_TOPIC_UE_VERSION_MAJOR: u8    = 2;            // 0xFF;        // any version major
+const PUB_TOPIC_RESOURCE_ID: u16        = 0x8001;       // 0xFFFF;      // any resource ID
 
-const SUB_TOPIC_AUTHORITY: &str = "carla";
-const SUB_TOPIC_UE_ID: u32 = 0x5BB0;
-const SUB_TOPIC_UE_VERSION_MAJOR: u8 = 1;
+const SUB_TOPIC_AUTHORITY: &str         = "carla";
+const SUB_TOPIC_UE_ID: u32              = 0x5BB0;
+const SUB_TOPIC_UE_VERSION_MAJOR: u8    = 1;
 
 fn subscriber_uuri() -> UUri {
     UUri::try_from_parts(
@@ -47,7 +47,8 @@ impl UListener for PublishReceiver {
         debug!("PublishReceiver: Received a message: {msg:?}");
 
         if let Some(payload) = msg.payload {
-            info!("Message has payload: {payload:?}");
+            let uri_str = msg.attributes.unwrap().source.unwrap().to_uri(false);
+            info!("Received message [payload: {payload:?}] from [source: {uri_str}]");
         } else {
             warn!("Message has no payload.")
         }
@@ -58,7 +59,7 @@ impl UListener for PublishReceiver {
 async fn main() -> Result<(), UStatus> {
     env_logger::init();
 
-    info!("Started zenoh_subscriber");
+    println!("\n*** Started zenoh_subscriber");
 
     let mut zenoh_config = Config::default();
     // Add the IPv4 endpoint to the Zenoh configuration
