@@ -18,10 +18,29 @@ use log::info;
 use up_rust::{UListener, UMessage, UStatus, UTransport, UUri};
 use up_transport_mqtt5::{Mqtt5Transport, Mqtt5TransportOptions, MqttClientOptions};
 
-// const WILDCARD_AUTHORITY:       &str = "*";         // any authority (service provider)
+/*
+const WILDCARD_AUTHORITY:       &str = "*";         // any authority (service provider)
 const WILDCARD_ENTITY_ID:       u32 = 0xFFFF_FFFF;  // any instance, any service
 const WILDCARD_ENTITY_VERSION:  u32 = 0xFF;         // any version major
 const WILDCARD_RESOURCE_ID:     u32 = 0xFFFF;       // any resource ID
+*/
+
+// topic uURI -> up://threadx/A/2/8001
+const PUB_TOPIC_AUTHORITY: &str         = "threadx";
+
+// topic uURI -> up://hpc/A/2/8001
+const PUB_TOPIC_AUTHORITY_2: &str       = "hpc";
+
+// topic uURI -> up://hpc/A/2/8001
+// const PUB_TOPIC_AUTHORITY_3: &str       = "carla";
+
+const PUB_TOPIC_UE_ID: u32              = 0x000A;
+const PUB_TOPIC_UE_VERSION_MAJOR: u32   = 2;
+const PUB_TOPIC_RESOURCE_ID: u32        = 0x8001;
+
+
+// Use a generic authority for the client connection
+const SUB_TOPIC_AUTHORITY: &str         = "subscriber";
 
 struct PrintlnListener {}
 
@@ -56,8 +75,7 @@ async fn main() -> Result<(), UStatus> {
         ..Default::default()
     };
 
-    // Use a generic authority for the client connection
-    let client_authority = "subscriber".to_string();
+    let client_authority = SUB_TOPIC_AUTHORITY.to_string();
     let client = Mqtt5Transport::new(mqtt_transport_options, client_authority).await?;
 
     // Connect to broker before registering listeners
@@ -72,35 +90,45 @@ async fn main() -> Result<(), UStatus> {
 
     let listener = Arc::new(PrintlnListener {});
 
-    // Define multiple authorities to subscribe to
-    // let authorities = ["threadx", "Vehicle_a", "sensor_hub"];
-    
-    // Only one authority to subscribe to
-    let authorities = ["threadx"];
+    /*
+     * Placeholder to allow the definition of multiple authorities to subscribe to
+     * pub source UUri definitions:
+     *  - "up://PUB_TOPIC_AUTHORITY/A/2/PUB_TOPIC_RESOURCE_ID"
+     *  - "up://PUB_TOPIC_AUTHORITY_2/A/2/PUB_TOPIC_RESOURCE_ID"
+     *  - "up://PUB_TOPIC_AUTHORITY_3/A/2/PUB_TOPIC_RESOURCE_ID"
+     */
+    // let authorities = [PUB_TOPIC_AUTHORITY, PUB_TOPIC_AUTHORITY_2, PUB_TOPIC_AUTHORITY_3];
+    let authorities = [PUB_TOPIC_AUTHORITY, PUB_TOPIC_AUTHORITY_2];
+    // let authorities = [PUB_TOPIC_AUTHORITY];
 
     // Subscribe to each authority
     for authority in authorities {
         let source_filter = UUri {
             authority_name:     authority.to_string(),
-            ue_id:              WILDCARD_ENTITY_ID,
-            ue_version_major:   WILDCARD_ENTITY_VERSION,
-            resource_id:        WILDCARD_RESOURCE_ID,
+            ue_id:              PUB_TOPIC_UE_ID,
+            ue_version_major:   PUB_TOPIC_UE_VERSION_MAJOR,
+            resource_id:        PUB_TOPIC_RESOURCE_ID,
             ..Default::default()
         };
 
-        info!("Subscribing to authority: {} -> uURI: {}", authority, source_filter.to_uri(true));
-
         client
             .register_listener(&source_filter, None, listener.clone())
-            .await?;
+            .await
+            .map(|_| {
+                log::info!("Successfully subscribed to: {}", source_filter.to_uri(true));
+            })
+            .map_err(|e| {
+                println!("Failed to subscribe to: {} - Error: {}", source_filter.to_uri(true), e);
+                log::error!("Failed to subscribe to: {} - Error: {}", source_filter.to_uri(true), e);
+                e
+            })?;
     }
 
     info!(
-        "Successfully subscribed to {} authorit{}",
+        "Successfully subscribed to {} topic{}",
         authorities.len(),
-        if authorities.len() > 1 { "ies" } else { "y" }
+        if authorities.len() > 1 { "s" } else { "" }
     );
-
 
     loop {
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
