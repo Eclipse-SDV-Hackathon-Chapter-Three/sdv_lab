@@ -20,6 +20,11 @@ use up_rust::{UListener, UMessage, UStatus, UTransport, UUri};
 use up_transport_zenoh::UPTransportZenoh;
 use zenoh::config::{Config, EndPoint};
 
+// const WILDCARD_AUTHORITY: &str      = "*";         // any authority (service provider)
+const WILDCARD_ENTITY_ID: u32       = 0xFFFF_FFFF;  // any instance, any service
+const WILDCARD_ENTITY_VERSION: u8   = 0xFF;         // any version major
+const WILDCARD_RESOURCE_ID: u16     = 0xFFFF;       // any resource ID
+
 const PUB_TOPIC_AUTHORITY: &str         = "threadx";    // "*";         // any authority (service provider)
 const PUB_TOPIC_UE_ID: u32              = 0x000A;       // 0xFFFF_FFFF; // any instance, any service
 const PUB_TOPIC_UE_VERSION_MAJOR: u8    = 2;            // 0xFF;        // any version major
@@ -47,7 +52,7 @@ impl UListener for PublishReceiver {
         debug!("PublishReceiver: Received a message: {msg:?}");
 
         if let Some(payload) = msg.payload {
-            let uri_str = msg.attributes.unwrap().source.unwrap().to_uri(false);
+            let uri_str = msg.attributes.unwrap().source.unwrap().to_uri(true);
             info!("Received message [payload: {payload:?}] from [source: {uri_str}]");
         } else {
             warn!("Message has no payload.")
