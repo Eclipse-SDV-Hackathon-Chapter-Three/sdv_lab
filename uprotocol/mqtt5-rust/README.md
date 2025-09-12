@@ -20,7 +20,7 @@ Filtering all the messages from the 'threadx' authority
 mosquitto_sub -h 5.196.78.28 -t 'threadx/+/+/+/+' -v -F '@H:@M:@S | %t | %p'
 ```
 
-Filtering all the messages from the 'threadx', 'Vehicle_a' and 'sensor_hub' authorities
+Filtering all the messages from the 'threadx', 'hpc' and 'carla' authorities
 ```bash
-mosquitto_sub -h 5.196.78.28 -t 'threadx/+/+/+/+' -t 'Vehicle_a/+/+/+/+' -t 'sensor_hub/+/+/+/+' -v -F '@H:@M:@S | %t | %p'
+mosquitto_sub -h 5.196.78.28 -t 'threadx/+/+/+/+' -t 'hpc/+/+/+/+' -t 'carla/+/+/+/+' -v -F '@H:@M:@S | %t | %p'
 ```
