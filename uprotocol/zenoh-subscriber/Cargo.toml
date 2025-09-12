@@ -1,7 +1,15 @@
 [package]
-name = "zenoh-subscriber"
+name = "zenoh-examples"
 version = "0.1.0"
 edition = "2024"
+
+[[bin]]
+name = "zenoh_publisher"
+path = "src/publisher.rs"
+ 
+[[bin]]
+name = "zenoh_subscriber"
+path = "src/main.rs"
 
 [dependencies]
 async-trait = { version = "0.1" }
