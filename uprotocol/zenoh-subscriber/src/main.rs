@@ -21,14 +21,22 @@ use up_transport_zenoh::UPTransportZenoh;
 use zenoh::config::{Config, EndPoint};
 
 // const WILDCARD_AUTHORITY: &str      = "*";         // any authority (service provider)
-const WILDCARD_ENTITY_ID: u32       = 0xFFFF_FFFF;  // any instance, any service
-const WILDCARD_ENTITY_VERSION: u8   = 0xFF;         // any version major
-const WILDCARD_RESOURCE_ID: u16     = 0xFFFF;       // any resource ID
+// const WILDCARD_ENTITY_ID: u32       = 0xFFFF_FFFF;  // any instance, any service
+// const WILDCARD_ENTITY_VERSION: u8   = 0xFF;         // any version major
+// const WILDCARD_RESOURCE_ID: u16     = 0xFFFF;       // any resource ID
 
-const PUB_TOPIC_AUTHORITY: &str         = "threadx";    // "*";         // any authority (service provider)
-const PUB_TOPIC_UE_ID: u32              = 0x000A;       // 0xFFFF_FFFF; // any instance, any service
-const PUB_TOPIC_UE_VERSION_MAJOR: u8    = 2;            // 0xFF;        // any version major
-const PUB_TOPIC_RESOURCE_ID: u16        = 0x8001;       // 0xFFFF;      // any resource ID
+// topic uURI -> up://threadx/A/2/8001
+const PUB_TOPIC_AUTHORITY: &str         = "threadx";
+
+// topic uURI -> up://hpc/A/2/8001
+const PUB_TOPIC_AUTHORITY_2: &str       = "hpc";
+
+// topic uURI -> up://hpc/A/2/8001
+// const PUB_TOPIC_AUTHORITY_3: &str       = "carla";
+
+const PUB_TOPIC_UE_ID: u32              = 0x000A;
+const PUB_TOPIC_UE_VERSION_MAJOR: u8    = 2;
+const PUB_TOPIC_RESOURCE_ID: u16        = 0x8001;
 
 const SUB_TOPIC_AUTHORITY: &str         = "carla";
 const SUB_TOPIC_UE_ID: u32              = 0x5BB0;
@@ -53,7 +61,7 @@ impl UListener for PublishReceiver {
 
         if let Some(payload) = msg.payload {
             let uri_str = msg.attributes.unwrap().source.unwrap().to_uri(true);
-            info!("Received message [payload: {payload:?}] from [source: {uri_str}]");
+            info!("Received message payload: [{payload:?}] from source: [{uri_str}]");
         } else {
             warn!("Message has no payload.")
         }
@@ -83,19 +91,47 @@ async fn main() -> Result<(), UStatus> {
             .unwrap(),
     );
 
-    let source_filter = UUri::try_from_parts(
-        PUB_TOPIC_AUTHORITY,
-        PUB_TOPIC_UE_ID,
-        PUB_TOPIC_UE_VERSION_MAJOR,
-        PUB_TOPIC_RESOURCE_ID,
-    )
-    .unwrap();
-
     let publish_receiver: Arc<dyn UListener> = Arc::new(PublishReceiver);
-    subscriber
-        .register_listener(&source_filter, None, publish_receiver.clone())
-        .await?;
 
+    /*
+     * Placeholder to allow the definition of multiple authorities to subscribe to
+     * pub source UUri definitions:
+     *  - "up://PUB_TOPIC_AUTHORITY/A/2/PUB_TOPIC_RESOURCE_ID"
+     *  - "up://PUB_TOPIC_AUTHORITY_2/A/2/PUB_TOPIC_RESOURCE_ID"
+     *  - "up://PUB_TOPIC_AUTHORITY_3/A/2/PUB_TOPIC_RESOURCE_ID"
+     */
+    // let authorities = [PUB_TOPIC_AUTHORITY, PUB_TOPIC_AUTHORITY_2, PUB_TOPIC_AUTHORITY_3];
+    let authorities = [PUB_TOPIC_AUTHORITY, PUB_TOPIC_AUTHORITY_2];
+    // let authorities = [PUB_TOPIC_AUTHORITY];
+
+    // Subscribe to each authority
+    for authority in authorities {
+        let source_filter =UUri::try_from_parts(
+            authority,
+            PUB_TOPIC_UE_ID,
+            PUB_TOPIC_UE_VERSION_MAJOR,
+            PUB_TOPIC_RESOURCE_ID
+        ).unwrap();
+
+        subscriber
+            .register_listener(&source_filter, None, publish_receiver.clone())
+            .await
+            .map(|_| {
+                log::info!("Successfully subscribed to: {}", source_filter.to_uri(true));
+            })
+            .map_err(|e| {
+                println!("Failed to subscribe to: {} - Error: {}", source_filter.to_uri(true), e);
+                log::error!("Failed to subscribe to: {} - Error: {}", source_filter.to_uri(true), e);
+                e
+            })?;     
+    }
+
+    info!(
+        "Successfully subscribed to {} topic{}",
+        authorities.len(),
+        if authorities.len() > 1 { "s" } else { "" }
+    );
+    
     thread::park();
     Ok(())
 }
