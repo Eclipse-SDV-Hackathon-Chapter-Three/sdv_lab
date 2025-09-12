@@ -19,7 +19,7 @@ use up_rust::{UListener, UMessage, UStatus, UTransport, UUri};
 use up_transport_mqtt5::{Mqtt5Transport, Mqtt5TransportOptions, MqttClientOptions};
 
 // const WILDCARD_AUTHORITY:       &str = "*";         // any authority (service provider)
-const WILDCARD_ENTITY_ID:       u32 = 0x0000_FFFF;  // any instance, any service
+const WILDCARD_ENTITY_ID:       u32 = 0xFFFF_FFFF;  // any instance, any service
 const WILDCARD_ENTITY_VERSION:  u32 = 0xFF;         // any version major
 const WILDCARD_RESOURCE_ID:     u32 = 0xFFFF;       // any resource ID
 
