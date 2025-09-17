@@ -3,8 +3,10 @@ services:
     image: ghcr.io/eclipse-uprotocol/up-streamer-rust/configurable-streamer:main
     ports:
       - "0.0.0.0:7447:7447"
-    expose:
-      - "7447"
+      - "1883:1883"    # MQTT Protocol
+    # expose:
+      # - "7447"
+    network_mode: host  # When using host network exposing ports is not needed
     volumes:
       - type: bind
         source: ./config

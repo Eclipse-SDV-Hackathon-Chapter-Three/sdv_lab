@@ -1,5 +1,6 @@
 {
   hostname: "5.196.78.28",
+  // hostname: "localhost",
   port: 1883,
   max_buffered_messages: 100,
   max_subscriptions: 100,

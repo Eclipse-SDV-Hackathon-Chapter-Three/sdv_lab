@@ -66,6 +66,7 @@ async fn main() -> Result<(), UStatus> {
     println!("\n*** Started mqtt5_subscriber...");
 
     let mqtt_client_options = MqttClientOptions {
+        // broker_uri: "localhost:1883".to_string(),
         broker_uri: "5.196.78.28:1883".to_string(),
         ..Default::default()
     };
