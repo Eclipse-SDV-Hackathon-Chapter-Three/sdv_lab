@@ -9,7 +9,7 @@ path = "src/publisher.rs"
  
 [[bin]]
 name = "zenoh_subscriber"
-path = "src/main.rs"
+path = "src/subscriber.rs"
 
 [dependencies]
 async-trait = { version = "0.1" }
