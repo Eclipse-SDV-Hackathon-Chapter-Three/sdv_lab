@@ -26,24 +26,14 @@
             // List of endpoints that use the zenoh transport
             endpoints: [
                 {
-                    // Authority of the entity that the endpoint represents
-                    authority: "carla",
-                    // Identifier of the endpoint
-                    endpoint: "carla_endpoint",
-                    // List of identifiers of all other endpoints that messages should be forwarded to
-                    forwarding: [
-                        "hpc_endpoint"
-                    ]
-                },
-                {
-                    authority: "hpc",
+                    authority: "EgoVehicle",
                     // Make sure that each endpoint has a unique identifier or the streamer will not start
-                    endpoint: "hpc_endpoint",
+                    endpoint: "egovehicle_endpoint",
                     // All endpoint identifiers listed here must also be defined in this config
                     forwarding: [
-                        "carla_endpoint",
+                        "aaos_endpoint"
                     ]
-                }
+                },
             ]
         },
         mqtt: {
@@ -51,11 +41,10 @@
             config_file: "config/MQTT_CONFIG.json5",
             endpoints: [
                 {
-                    authority: "threadx",
-                    endpoint: "threadx_endpoint",
+                    authority: "AAOS",
+                    endpoint: "aaos_endpoint",
                     forwarding: [
-                        "carla_endpoint",
-                        "hpc_endpoint"
+                        "cruisecontrol_endpoint",
                     ]
                 },
             ]

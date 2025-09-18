@@ -1,7 +1,15 @@
 [package]
-name = "zenoh-subscriber"
+name = "mqtt"
 version = "0.1.0"
 edition = "2024"
+
+[[bin]]
+name = "aaos"
+path = "src/aaos.rs"
+
+[[bin]]
+name = "threadx"
+path = "src/threadx.rs"
 
 [dependencies]
 async-trait = { version = "0.1" }
@@ -14,11 +22,5 @@ tokio = { version = "1.44", default-features = false, features = [
     "time",
     "macros",
 ] }
-up-rust = { version = "0.5.0", default-features = false }
-up-transport-zenoh = { version = "0.6.0", features = ["zenoh-unstable"] }
-zenoh = { version = "1.2.1", features = [
-    "default",
-    "plugins",
-    "unstable",
-    "internal",
-] }
+up-rust = { version = "0.7.0", default-features = false }
+up-transport-mqtt5 = { git = "https://github.com/eclipse-uprotocol/up-transport-mqtt5-rust" }

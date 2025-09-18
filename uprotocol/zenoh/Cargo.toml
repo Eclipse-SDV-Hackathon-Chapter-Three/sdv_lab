@@ -1,0 +1,32 @@
+[package]
+name = "zenoh"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "ego_vehicle"
+path = "src/ego_vehicle.rs"
+
+[[bin]]
+name = "cruise_control"
+path = "src/cruise_control.rs"
+
+[dependencies]
+async-trait = { version = "0.1" }
+log = { version = "0.4.20" }
+env_logger = { version = "0.10.1" }
+tokio = { version = "1.44", default-features = false, features = [
+    "rt",
+    "rt-multi-thread",
+    "sync",
+    "time",
+    "macros",
+] }
+up-rust = { version = "0.5.0", default-features = false }
+up-transport-zenoh = { version = "0.6.0", features = ["zenoh-unstable"] }
+zenoh = { version = "1.2.1", features = [
+    "default",
+    "plugins",
+    "unstable",
+    "internal",
+] }

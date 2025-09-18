@@ -11,6 +11,15 @@
  * SPDX-License-Identifier: Apache-2.0
  ********************************************************************************/
 
+// EgoVehicle
+// publishes on [
+//     EGOVehicle/0/2/8001,
+//     EGOVehicle/0/2/8002
+// ]
+// subscribes to [
+//     CruiseControl/0/2/8001
+// ]
+
 use async_trait::async_trait;
 use log::{debug, info, warn};
 use std::str::FromStr;
@@ -20,24 +29,15 @@ use up_rust::{UListener, UMessage, UStatus, UTransport, UUri};
 use up_transport_zenoh::UPTransportZenoh;
 use zenoh::config::{Config, EndPoint};
 
-const PUB_TOPIC_AUTHORITY: &str = "threadx";
-const PUB_TOPIC_UE_ID: u32 = 0x000A;
-const PUB_TOPIC_UE_VERSION_MAJOR: u8 = 2;
-const PUB_TOPIC_RESOURCE_ID: u16 = 0x8001;
+// publish topics
+const PUB_TOPIC_1: &str = "EGOVehicle/0/2/8001";
+const PUB_TOPIC_2: &str = "EGOVehicle/0/2/8002";
 
-const SUB_TOPIC_AUTHORITY: &str = "carla";
-const SUB_TOPIC_UE_ID: u32 = 0x5BB0;
-const SUB_TOPIC_UE_VERSION_MAJOR: u8 = 1;
+// subscribe topics
+const SUB_TOPIC_1: &str = "CruiseControl/0/2/8001";
 
-fn subscriber_uuri() -> UUri {
-    UUri::try_from_parts(
-        SUB_TOPIC_AUTHORITY,
-        SUB_TOPIC_UE_ID,
-        SUB_TOPIC_UE_VERSION_MAJOR,
-        0,
-    )
-    .unwrap()
-}
+// id of the entity itself
+const ENTITY_ID: &str = "EGOVehicle/0/2/0";
 
 struct PublishReceiver;
 
@@ -70,12 +70,16 @@ async fn main() -> Result<(), UStatus> {
         ])
         .expect("Unable to set Zenoh Config");
 
-    let subscriber_uri: String = (&subscriber_uuri()).into();
-    let subscriber: Arc<dyn UTransport> = Arc::new(
+    let client_uri: String = (&subscriber_uuri()).into();
+    let client: Arc<dyn UTransport> = Arc::new(
         UPTransportZenoh::new(zenoh_config, subscriber_uri)
             .await
             .unwrap(),
     );
+
+    // TODO subscribe to the "subscribe topics"
+
+    // TODO publish helloworld messages to every topic in the list of "publish topics" up top
 
     let source_filter = UUri::try_from_parts(
         PUB_TOPIC_AUTHORITY,
@@ -86,7 +90,7 @@ async fn main() -> Result<(), UStatus> {
     .unwrap();
 
     let publish_receiver: Arc<dyn UListener> = Arc::new(PublishReceiver);
-    subscriber
+    client
         .register_listener(&source_filter, None, publish_receiver.clone())
         .await?;
 

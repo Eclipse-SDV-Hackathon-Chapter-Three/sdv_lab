@@ -3126,7 +3126,7 @@ dependencies = [
  "tracing-subscriber",
  "up-rust",
  "url",
- "zenoh",
+ "zenoh 1.5.1",
 ]
 
 [[package]]
@@ -3731,6 +3731,19 @@ dependencies = [
 
 [[package]]
 name = "zenoh"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "env_logger",
+ "log",
+ "tokio",
+ "up-rust",
+ "up-transport-zenoh",
+ "zenoh 1.5.1",
+]
+
+[[package]]
+name = "zenoh"
 version = "1.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3427f6680d4de3f71bd823e49df91c43d97a90475bed4ace0e6fc60c93a82401"
@@ -4153,19 +4166,6 @@ dependencies = [
  "tracing",
  "zenoh-macros",
  "zenoh-result",
-]
-
-[[package]]
-name = "zenoh-subscriber"
-version = "0.1.0"
-dependencies = [
- "async-trait",
- "env_logger",
- "log",
- "tokio",
- "up-rust",
- "up-transport-zenoh",
- "zenoh",
 ]
 
 [[package]]
