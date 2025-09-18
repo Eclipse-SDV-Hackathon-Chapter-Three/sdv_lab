@@ -1,11 +1,13 @@
 use serde::{Serialize};
+use serde_json;
+use std::time::SystemTime;
 use tokio::time::{sleep, Duration};
 use rand::Rng;
 use zenoh::prelude::r#async::*;
 
 #[derive(Serialize)]
 struct ClockStatus {
-    time: f64,
+    time: u64,
 }
 
 #[derive(Serialize)]
@@ -20,7 +22,7 @@ struct TargetSpeed {
 
 #[derive(Serialize)]
 struct EngageStatus {
-    engaged: bool,
+    engaged: u8,
 }
 
 #[tokio::main]
@@ -32,27 +34,35 @@ async fn main() {
     let pub_target = session.declare_publisher("adas/cruise_control/target_speed").res().await.unwrap();
     let pub_engage = session.declare_publisher("adas/cruise_control/engage").res().await.unwrap();
 
-    let mut time = 0.0;
-    let mut engaged = true;
+    #[allow(unused_mut)]
+    let mut engaged = 1;
 
     loop {
-        time += 0.1;
-        let velocity = rand::thread_rng().gen_range(5.0..15.0);
-        let target = rand::thread_rng().gen_range(10.0..20.0);
+        let velocity = rand::rng().random_range(5.0..15.0);
+        let target = rand::rng().random_range(10.0..20.0);
 
-        let clock = ClockStatus { time };
+        // Getting system time as a timestamp in seconds
+        let current_time = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+
+        let clock = ClockStatus { time: current_time };
         let vel = VelocityStatus { velocity };
         let tgt = TargetSpeed { speed: target };
         let eng = EngageStatus { engaged };
 
-        pub_clock.put(serde_json::to_vec(&clock).unwrap()).res().await.unwrap();
-        pub_velocity.put(serde_json::to_vec(&vel).unwrap()).res().await.unwrap();
-        pub_target.put(serde_json::to_vec(&tgt).unwrap()).res().await.unwrap();
-        pub_engage.put(serde_json::to_vec(&eng).unwrap()).res().await.unwrap();
+        // Payload needs to be formatted as a string
+        pub_clock.put(serde_json::to_string(&clock).unwrap()).res().await.unwrap();
+        pub_velocity.put(serde_json::to_string(&vel).unwrap()).res().await.unwrap();
+        pub_target.put(serde_json::to_string(&tgt).unwrap()).res().await.unwrap();
+        pub_engage.put(serde_json::to_string(&eng).unwrap()).res().await.unwrap();
 
-        println!("Published: time={:.2}, velocity={:.2}, target={:.2}, engaged={}", time, velocity, target, engaged);
+        println!("Published: time={}, velocity={:.2}, target={:.2}, engaged={}", 
+                current_time, velocity, target, engaged);
 
-        //engaged = !engaged; // toggle engagement for testing
-        sleep(Duration::from_secs(1)).await;
+        // engaged = if engaged == 1 { 0 } else { 1 }; // toggle engagement for testing
+
+        sleep(Duration::from_secs(2)).await;
     }
 }
