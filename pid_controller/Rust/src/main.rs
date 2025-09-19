@@ -1,17 +1,18 @@
 use pid_controller::PIDController;
-use zenoh_handler::ZenohHandler;
-use zenoh::prelude::r#async::*;
+use uprotocol_handler::UProtocolHandler;
+use up_transport_zenoh::UPTransportZenoh;
+use up_rust::UUri;
 use log::info;
 
 mod pid_controller;
-mod zenoh_handler;
+mod uprotocol_handler;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Initialize logging
     env_logger::init();
 
-    info!("*** Started PID Controller");
+    info!("*** Started PID Controller with uProtocol");
 
     let kp = 0.125;
     let ki = kp / 8.0;
@@ -21,21 +22,18 @@ async fn main() {
 
     let pid = PIDController::new(kp, ki, kd);
 
-    let session = zenoh::open(zenoh::prelude::Config::default()).res().await.unwrap();
+    // Create entity URI for the PID controller
+    let entity_uri = UUri::try_from_parts("PIDController", 0, 2, 0)?;
+    let entity_uri_string: String = (&entity_uri).into();
 
-    let handler = ZenohHandler::new(
-        pid,
-        session,
-        "vehicle/status/clock_status".to_string(),
-        "vehicle/status/velocity_status".to_string(),
-        "adas/cruise_control/target_speed".to_string(),
-        "adas/cruise_control/engage".to_string(),
-        "control/command/actuation_cmd".to_string(),
-    );
+    // Initialize uProtocol transport with Zenoh
+    let transport = UPTransportZenoh::new(Default::default(), entity_uri_string).await?;
 
-    handler.start().await;
+    let handler = UProtocolHandler::new(pid, transport)?;
 
-    println!("PID controller running (CTRL-C to terminate)...");
+    handler.start().await?;
+
+    println!("PID controller running with uProtocol (CTRL-C to terminate)...");
 
     // Set up Ctrl+C handler
     let handler_clone = std::sync::Arc::new(handler);
