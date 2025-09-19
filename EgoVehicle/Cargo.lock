@@ -433,6 +433,7 @@ checksum = "d71b6127be86fdcfddb610f7182ac57211d4b18a3e9c82eb2d17662f2227ad6a"
 [[package]]
 name = "carla"
 version = "0.11.1"
+source = "git+https://github.com/Eclipse-SDV-Hackathon-Chapter-Three/carla-rust.git?branch=action-buffer-fix#3dfeeeda53f8f33ce3b222934768e8bdcd328beb"
 dependencies = [
  "anyhow",
  "autocxx",
@@ -449,6 +450,7 @@ dependencies = [
 [[package]]
 name = "carla-src"
 version = "0.11.0"
+source = "git+https://github.com/Eclipse-SDV-Hackathon-Chapter-Three/carla-rust.git?branch=action-buffer-fix#3dfeeeda53f8f33ce3b222934768e8bdcd328beb"
 dependencies = [
  "anyhow",
  "autotools",
@@ -467,12 +469,12 @@ dependencies = [
  "sha2",
  "tar",
  "ureq",
- "walkdir",
 ]
 
 [[package]]
 name = "carla-sys"
 version = "0.11.1"
+source = "git+https://github.com/Eclipse-SDV-Hackathon-Chapter-Three/carla-rust.git?branch=action-buffer-fix#3dfeeeda53f8f33ce3b222934768e8bdcd328beb"
 dependencies = [
  "anyhow",
  "autocxx",
@@ -481,7 +483,6 @@ dependencies = [
  "cxx",
  "json5",
  "once_cell",
- "pkg-config",
  "serde",
  "sha2",
  "tar",
