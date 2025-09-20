@@ -1,7 +1,7 @@
 use crate::helpers::ViewFactory;
 use crate::sensors::Listen;
 use carla::client::Sensor as CarlaSensor;
-use carla::sensor::SensorData; // enum that Sensor::listen emits
+use carla::sensor::SensorData;
 use carla::sensor::data::LaneInvasionEvent;
 use serde::{Deserialize, Serialize};
 

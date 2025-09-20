@@ -13,6 +13,8 @@ pub struct Args {
     pub ego_vehicle_sensor_lane_invasion_role: Option<String>,
     #[clap(long, default_value = "ego_vehicle_sensor_collision")]
     pub ego_vehicle_sensor_collision_role: Option<String>,
+    #[clap(long, default_value = "ego_vehicle_sensor_object_detection")]
+    pub ego_vehicle_sensor_object_detection_role: Option<String>,
     #[clap(long, default_value_t = 0.100)]
     pub delta: f64,
     #[clap(long, default_value = None)]

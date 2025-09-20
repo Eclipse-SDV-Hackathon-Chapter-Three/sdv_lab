@@ -2,7 +2,7 @@ use crate::helpers::ViewFactory;
 use crate::sensors::Listen;
 use crate::sensors::actor::{ActorSerDe, Vector3DSerDe};
 use carla::client::Sensor as CarlaSensor;
-use carla::sensor::SensorData; // enum that Sensor::listen emits
+use carla::sensor::SensorData;
 use carla::sensor::data::CollisionEvent;
 use serde::{Deserialize, Serialize};
 
