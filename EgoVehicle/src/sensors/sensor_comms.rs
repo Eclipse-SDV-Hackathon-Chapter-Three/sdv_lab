@@ -1,8 +1,8 @@
 use std::future::Future;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
-use std::thread::{self, JoinHandle};
 use std::thread::ThreadId;
+use std::thread::{self, JoinHandle};
 
 pub trait Listen {
     type Data: Send + 'static;

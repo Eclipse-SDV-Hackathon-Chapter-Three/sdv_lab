@@ -1,8 +1,9 @@
+use crate::helpers::ViewFactory;
 use crate::sensors::Listen;
 use carla::client::Sensor as CarlaSensor;
 use carla::sensor::SensorData; // enum that Sensor::listen emits
 use carla::sensor::data::LaneInvasionEvent;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 /// Typed view over a CARLA Sensor that emits `LaneInvasionEvent`.
 pub struct LaneInvasion<'a>(pub &'a CarlaSensor);
@@ -23,6 +24,15 @@ impl<'a> Listen for LaneInvasion<'a> {
                 log::warn!("Received non LaneInvasionEvent");
             }
         });
+    }
+}
+
+pub struct LaneInvasionFactory;
+
+impl ViewFactory for LaneInvasionFactory {
+    type View<'a> = LaneInvasion<'a>;
+    fn make<'a>(&self, s: &'a CarlaSensor) -> Self::View<'a> {
+        LaneInvasion(s)
     }
 }
 
@@ -53,7 +63,6 @@ pub enum LaneMarkingColorSerDe {
     Other = 5,
 }
 
-
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "carla::road::element::LaneMarking_LaneChange")]
 pub enum LaneMarkingLaneChangeSerDe {
@@ -79,7 +88,7 @@ pub struct LaneMarkingSerDe {
 
 #[derive(Serialize, Deserialize)]
 pub struct LaneInvasionEventSerDe {
-    pub crossed_lane_markings: Vec<LaneMarkingSerDe>
+    pub crossed_lane_markings: Vec<LaneMarkingSerDe>,
 }
 
 impl From<LaneInvasionEvent> for LaneInvasionEventSerDe {
@@ -90,13 +99,13 @@ impl From<LaneInvasionEvent> for LaneInvasionEventSerDe {
                 marking_type: clm.type_(),
                 marking_color: clm.color(),
                 lane_change: clm.lane_change(),
-                width: clm.width()
+                width: clm.width(),
             };
             crossed_lane_markings.push(lane_marking_serde);
         }
 
         LaneInvasionEventSerDe {
-            crossed_lane_markings
+            crossed_lane_markings,
         }
     }
 }

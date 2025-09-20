@@ -18,15 +18,18 @@ use carla::client::{ActorBase, Client};
 use carla::sensor::data::LaneInvasionEvent;
 use clap::Parser;
 use ego_vehicle::args::Args;
-use ego_vehicle::sensors::{LaneInvasion, SensorComms, LaneInvasionEventSerDe};
+use ego_vehicle::helpers::{setup_sensor_with_transport};
+use ego_vehicle::sensors::{
+    LaneInvasionEventSerDe, LaneInvasionFactory,
+};
 use log;
+use serde_json;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use up_rust::{UTransport, UMessageBuilder, UUri, UPayloadFormat};
+use up_rust::{UPayloadFormat, UTransport, UUri};
 use up_transport_zenoh::UPTransportZenoh;
 use zenoh::{Config, bytes::Encoding, key_expr::KeyExpr};
-use serde_json;
 
 // General constants
 const CLIENT_TIME_MS: u64 = 5_000;
@@ -129,95 +132,32 @@ async fn main() {
         tokio::time::sleep(Duration::from_millis(POLLING_EGO_MS)).await;
     }
 
-    // Wait for the Ego Vehicle sensor
-    let mut ego_vehicle_sensor_lane_invasion_id: Option<u32> = None;
+    // -- Set up Sensor for Lane Invasion -- (generic)
+    let uuri =
+        UUri::try_from_parts("adas_compute", 0x0000_5a6b, 0x01, 0x0001).expect("Invalid UUri");
 
-    while running.load(Ordering::SeqCst) && ego_vehicle_sensor_lane_invasion_id.is_none() {
-        log::info!("Waiting for the Ego Vehicle sensor: lane invasion...");
-
-        // Syncronize Carla's world
-        let _ = carla_world.wait_for_tick();
-
-        // Check if the Ego Vehicle actor exists in the world
-        for actor in carla_world.actors().iter() {
-            for attribute in actor.attributes().iter() {
-                if attribute.id() == "role_name"
-                    && attribute.value_string() == args.ego_vehicle_sensor_lane_invasion_role
-                {
-                    log::info!(
-                        "Found '{}' actor with id: {}",
-                        args.ego_vehicle_sensor_lane_invasion_role,
-                        actor.id()
-                    );
-                    ego_vehicle_sensor_lane_invasion_id = Some(actor.id());
-
-                    break;
-                }
-            }
-        }
-
-        // Sleep to avoid busy-waiting
-        tokio::time::sleep(Duration::from_millis(POLLING_EGO_MS)).await;
-    }
-
-    // scoping this for now, may spin off into a function
-    let sensor_lane_invasion = {
-        let Some(sensor_lane_invasion) =
-            carla_world.actor(ego_vehicle_sensor_lane_invasion_id.unwrap())
-        else {
-            panic!(
-                "Unable to locate the sensor_lane_invasion via its id: {:?}",
-                ego_vehicle_sensor_lane_invasion_id
-            );
-        };
-
-        let Ok(sensor_lane_invasion) = sensor_lane_invasion.into_kinds().try_into_sensor() else {
-            panic!("Unable to turn sensor_lane_invasion actor into a sensor");
-        };
-
-        sensor_lane_invasion
+    // Encoder: LaneInvasionEvent -> Vec<u8>
+    let encode = |evt: LaneInvasionEvent| {
+        let serde_evt: LaneInvasionEventSerDe = evt.into();
+        serde_json::to_vec(&serde_evt).map_err(|e| e.into())
     };
 
-    // Create the SensorComms for the LaneInvasion sensor
-    let comms = SensorComms::new("front");
+    let (_comms, lane_actor_id, _lane_sensor_keepalive) = setup_sensor_with_transport(
+        &carla_world,
+        &running,
+        &args.ego_vehicle_sensor_lane_invasion_role,
+        "front",
+        POLLING_EGO_MS,
+        LaneInvasionFactory, // <-- factory instead of closure
+        uuri,
+        encode,
+        UPayloadFormat::UPAYLOAD_FORMAT_JSON,
+        Arc::clone(&transport),
+    )
+    .await
+    .expect("Unable to set up sensor with transport");
 
-    // Wrap the CARLA sensor with a typed view for capturing LaneInvasionEvents
-    let sensor_lane_invasion = LaneInvasion(&sensor_lane_invasion);
-
-    // Precompute the UUri once (outside the callback)
-    let sensor_lane_invasion_uuri = UUri::try_from_parts("adas_compute", 0x0000_5a6b, 0x01, 0x0001)
-        .expect("Invalid UUri");
-
-    // Keep shared handles we’ll capture in the handler
-    let transport_shared = Arc::clone(&transport);
-    let sensor_lane_invasion_uuri_shared = sensor_lane_invasion_uuri.clone();
-
-    // Attach the listener with an async handler
-    comms.listen_on_async(&sensor_lane_invasion, move |evt: LaneInvasionEvent| {
-        // Per-call: one cheap Arc clone; clone UUri if `publish` takes it by value
-        let transport_cb = Arc::clone(&transport_shared);
-        let uuri = sensor_lane_invasion_uuri_shared.clone();
-
-        async move {
-            let lane_invasion_event_serde: LaneInvasionEventSerDe = evt.into();
-
-            let lane_invasion_event_payload = match serde_json::to_vec(&lane_invasion_event_serde) {
-                Ok(b) => b,
-                Err(e) => {
-                    log::error!("JSON serialization failed: {e}");
-                    return;
-                }
-            };
-
-            let umsg = UMessageBuilder::publish(uuri)
-                .build_with_payload(lane_invasion_event_payload, UPayloadFormat::UPAYLOAD_FORMAT_JSON)
-                .expect("unable to build publish message");
-
-            if let Err(err) = transport_cb.send(umsg).await {
-                log::error!("transport send failed: {:?}", err);
-            }
-        }
-    });
+    let _ego_vehicle_sensor_lane_invasion_id = Some(lane_actor_id);
 
     // -- Set up Zenoh session, subscribers and publishers --
     log::info!("Opening the Zenoh session...");
