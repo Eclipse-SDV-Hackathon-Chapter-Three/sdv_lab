@@ -79,7 +79,6 @@ pub struct LaneMarkingSerDe {
 
 #[derive(Serialize, Deserialize)]
 pub struct LaneInvasionEventSerDe {
-    // fill in actor information as needed
     pub crossed_lane_markings: Vec<LaneMarkingSerDe>
 }
 

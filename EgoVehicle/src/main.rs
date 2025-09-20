@@ -18,14 +18,15 @@ use carla::client::{ActorBase, Client};
 use carla::sensor::data::LaneInvasionEvent;
 use clap::Parser;
 use ego_vehicle::args::Args;
-use ego_vehicle::sensors::{LaneInvasion, SensorComms};
+use ego_vehicle::sensors::{LaneInvasion, SensorComms, LaneInvasionEventSerDe};
 use log;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use up_rust::{UTransport, UMessageBuilder, UUri};
+use up_rust::{UTransport, UMessageBuilder, UUri, UPayloadFormat};
 use up_transport_zenoh::UPTransportZenoh;
 use zenoh::{Config, bytes::Encoding, key_expr::KeyExpr};
+use serde_json;
 
 // General constants
 const CLIENT_TIME_MS: u64 = 5_000;
@@ -189,7 +190,7 @@ async fn main() {
 
     // Keep shared handles we’ll capture in the handler
     let transport_shared = Arc::clone(&transport);
-    let sensor_lane_invasion_uuri_shared = sensor_lane_invasion_uuri.clone(); // only if UUri: Clone (see below)
+    let sensor_lane_invasion_uuri_shared = sensor_lane_invasion_uuri.clone();
 
     // Attach the listener with an async handler
     comms.listen_on_async(&sensor_lane_invasion, move |evt: LaneInvasionEvent| {
@@ -197,20 +198,24 @@ async fn main() {
         let transport_cb = Arc::clone(&transport_shared);
         let uuri = sensor_lane_invasion_uuri_shared.clone();
 
-        // -- handle LaneInvasion event
-
         async move {
+            let lane_invasion_event_serde: LaneInvasionEventSerDe = evt.into();
+
+            let lane_invasion_event_payload = match serde_json::to_vec(&lane_invasion_event_serde) {
+                Ok(b) => b,
+                Err(e) => {
+                    log::error!("JSON serialization failed: {e}");
+                    return;
+                }
+            };
+
             let umsg = UMessageBuilder::publish(uuri)
-                .build()
+                .build_with_payload(lane_invasion_event_payload, UPayloadFormat::UPAYLOAD_FORMAT_JSON)
                 .expect("unable to build publish message");
 
             if let Err(err) = transport_cb.send(umsg).await {
                 log::error!("transport send failed: {:?}", err);
             }
-
-            // Do your decoding / storage / network IO here:
-            println!("processing on worker thread: {:?}", evt);
-            // do_heavy_work(evt);
         }
     });
 

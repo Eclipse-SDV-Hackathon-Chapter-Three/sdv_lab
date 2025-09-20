@@ -1000,6 +1000,7 @@ dependencies = [
  "log",
  "pretty_env_logger",
  "serde",
+ "serde_json",
  "tokio",
  "up-rust",
  "up-transport-zenoh",
