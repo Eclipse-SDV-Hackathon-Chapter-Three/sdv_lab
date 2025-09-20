@@ -1,10 +1,10 @@
 use crate::helpers::ViewFactory;
 use crate::sensors::Listen;
-use ndarray::{ArrayView2, Array2};
-use serde::{Deserialize, Serialize, Serializer, Deserializer};
-use carla::sensor::data::{Image as ImageEvent, Color};
 use carla::client::Sensor as CarlaSensor;
 use carla::sensor::SensorData;
+use carla::sensor::data::{Color, Image as ImageEvent};
+use ndarray::Array2;
+use serde::{Deserialize, Serialize};
 
 /// Typed view over a CARLA Sensor that emits `ImageEvent`.
 pub struct Image<'a>(pub &'a CarlaSensor);
@@ -50,9 +50,9 @@ struct ColorRemote {
 // Put this in the same module as your struct, so the path `self::array2_color_remote` resolves.
 mod array2_color_remote {
     use super::*;
-    use serde::{Serializer, Deserializer, Serialize, Deserialize};
-    use serde::ser::SerializeSeq;
     use serde::de::{self, SeqAccess, Visitor};
+    use serde::ser::SerializeSeq;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
     use std::fmt;
 
     // Serialize &Color via the remote impl
@@ -108,9 +108,13 @@ mod array2_color_remote {
                 }
                 let h = rows.len();
                 let w = rows.get(0).map_or(0, |r| r.len());
-                if w == 0 && h == 0 { return Ok(Array2::from_shape_vec((0, 0), vec![]).unwrap()); }
+                if w == 0 && h == 0 {
+                    return Ok(Array2::from_shape_vec((0, 0), vec![]).unwrap());
+                }
                 for r in &rows {
-                    if r.len() != w { return Err(de::Error::custom("ragged 2D array")); }
+                    if r.len() != w {
+                        return Err(de::Error::custom("ragged 2D array"));
+                    }
                 }
                 let flat: Vec<Color> = rows.into_iter().flatten().collect();
                 ndarray::Array2::from_shape_vec((h, w), flat).map_err(de::Error::custom)

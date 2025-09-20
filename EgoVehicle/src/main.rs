@@ -15,13 +15,15 @@
 //
 
 use carla::client::{ActorBase, Client};
-use carla::sensor::data::{CollisionEvent, LaneInvasionEvent, ObstacleDetectionEvent};
+use carla::sensor::data::{
+    CollisionEvent, Image as ImageEvent, LaneInvasionEvent, ObstacleDetectionEvent,
+};
 use clap::Parser;
 use ego_vehicle::args::Args;
 use ego_vehicle::helpers::setup_sensor_with_transport;
 use ego_vehicle::sensors::{
-    CollisionEventSerDe, CollisionFactory, LaneInvasionEventSerDe, LaneInvasionFactory,
-    ObstacleDetectionEventSerDe, ObstacleDetectionFactory,
+    CollisionEventSerDe, CollisionFactory, ImageEventSerDe, ImageFactory, LaneInvasionEventSerDe,
+    LaneInvasionFactory, ObstacleDetectionEventSerDe, ObstacleDetectionFactory,
 };
 use log;
 use serde_json;
@@ -258,6 +260,45 @@ async fn main() {
     } else {
         (None, None, None)
     };
+
+    // -- Set up Sensor for Image -- (generic)
+    let (_image_comms, _ego_vehicle_sensor_image_id, _image_sensor_keepalive) =
+        if let Some(ego_vehicle_sensor_image_role) = args.ego_vehicle_sensor_image_role {
+            let uuri = UUri::try_from_parts("adas_compute", 0x0000_5a6b, 0x01, 0x0004)
+                .expect("Invalid UUri");
+
+            // Encoder: ImageEvent -> Vec<u8>
+            let encode = |evt: ImageEvent| {
+                let serde_evt: ImageEventSerDe = evt.into();
+                serde_json::to_vec(&serde_evt).map_err(|e| e.into())
+            };
+
+            let (_image_comms, image_actor_id, _image_sensor_keepalive) =
+                setup_sensor_with_transport(
+                    &carla_world,
+                    &running,
+                    &ego_vehicle_sensor_image_role,
+                    "image_sensor",
+                    POLLING_EGO_MS,
+                    ImageFactory,
+                    uuri,
+                    encode,
+                    UPayloadFormat::UPAYLOAD_FORMAT_JSON,
+                    Arc::clone(&transport),
+                )
+                .await
+                .expect("Unable to set up obstacle detection sensor with transport");
+
+            let _ego_vehicle_sensor_image_id = Some(image_actor_id);
+
+            (
+                Some(_image_comms),
+                Some(_ego_vehicle_sensor_image_id),
+                Some(_image_sensor_keepalive),
+            )
+        } else {
+            (None, None, None)
+        };
 
     // -- Set up Zenoh session, subscribers and publishers --
     log::info!("Opening the Zenoh session...");
