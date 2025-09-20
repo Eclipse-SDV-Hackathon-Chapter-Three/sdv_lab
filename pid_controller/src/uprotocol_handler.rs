@@ -1,3 +1,19 @@
+//
+// Copyright (c) 2025 The X-Verse <https://github.com/The-Xverse>
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+//
+
 use std::sync::{Arc, Mutex};
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -290,14 +306,14 @@ impl UProtocolHandler {
         let results = self.results.lock().unwrap();
         
         // Create logs directory if it doesn't exist
-        if let Err(e) = std::fs::create_dir_all("pid_data") {
+        if let Err(e) = std::fs::create_dir_all("logs") {
             error!("Failed to create logs directory: {}", e);
             return;
         }
         
         // Store each result type in separate files
         for (key, values) in results.iter() {
-            let filename = format!("pid_data/{}.log", key);
+            let filename = format!("logs/{}.log", key);
             let content = values.iter()
                 .map(|v| v.to_string())
                 .collect::<Vec<String>>()
@@ -312,7 +328,7 @@ impl UProtocolHandler {
 
         // Also save as JSON for compatibility
         if let Ok(json) = serde_json::to_string(&*results) {
-            std::fs::write("pid_data/pid_results.json", json).unwrap_or_else(|e| {
+            std::fs::write("logs/pid_results.json", json).unwrap_or_else(|e| {
                 error!("Failed to write JSON results: {}", e);
             });
         }
