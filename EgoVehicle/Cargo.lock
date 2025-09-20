@@ -999,6 +999,7 @@ dependencies = [
  "ctrlc",
  "log",
  "nalgebra",
+ "ndarray",
  "pretty_env_logger",
  "serde",
  "serde_json",
@@ -2006,6 +2007,7 @@ dependencies = [
  "num-integer",
  "num-traits",
  "rawpointer",
+ "serde",
 ]
 
 [[package]]
