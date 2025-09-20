@@ -15,12 +15,13 @@
 //
 
 use carla::client::{ActorBase, Client};
-use carla::sensor::data::{CollisionEvent, LaneInvasionEvent};
+use carla::sensor::data::{CollisionEvent, LaneInvasionEvent, ObstacleDetectionEvent};
 use clap::Parser;
 use ego_vehicle::args::Args;
 use ego_vehicle::helpers::setup_sensor_with_transport;
 use ego_vehicle::sensors::{
     CollisionEventSerDe, CollisionFactory, LaneInvasionEventSerDe, LaneInvasionFactory,
+    ObstacleDetectionEventSerDe, ObstacleDetectionFactory,
 };
 use log;
 use serde_json;
@@ -198,7 +199,7 @@ async fn main() {
                     Arc::clone(&transport),
                 )
                 .await
-                .expect("Unable to set up sensor with transport");
+                .expect("Unable to set up collision sensor with transport");
 
             let _ego_vehicle_sensor_collision_id = Some(collision_actor_id);
 
@@ -210,6 +211,53 @@ async fn main() {
         } else {
             (None, None, None)
         };
+
+    // -- Set up Sensor for Obstacle Detection -- (generic)
+    let (
+        _obstacle_detection_comms,
+        _ego_vehicle_sensor_obstacle_detection_id,
+        _obstacle_detection_sensor_keepalive,
+    ) = if let Some(ego_vehicle_sensor_obstacle_detection_role) =
+        args.ego_vehicle_sensor_obstacle_detection_role
+    {
+        let uuri =
+            UUri::try_from_parts("adas_compute", 0x0000_5a6b, 0x01, 0x0003).expect("Invalid UUri");
+
+        // Encoder: ObstacleDetectionEvent -> Vec<u8>
+        let encode = |evt: ObstacleDetectionEvent| {
+            let serde_evt: ObstacleDetectionEventSerDe = evt.into();
+            serde_json::to_vec(&serde_evt).map_err(|e| e.into())
+        };
+
+        let (
+            _obstacle_detection_comms,
+            obstacle_detection_actor_id,
+            _obstacle_detection_sensor_keepalive,
+        ) = setup_sensor_with_transport(
+            &carla_world,
+            &running,
+            &ego_vehicle_sensor_obstacle_detection_role,
+            "obstacle_detection_sensor",
+            POLLING_EGO_MS,
+            ObstacleDetectionFactory,
+            uuri,
+            encode,
+            UPayloadFormat::UPAYLOAD_FORMAT_JSON,
+            Arc::clone(&transport),
+        )
+        .await
+        .expect("Unable to set up obstacle detection sensor with transport");
+
+        let _ego_vehicle_sensor_obstacle_detection_id = Some(obstacle_detection_actor_id);
+
+        (
+            Some(_obstacle_detection_comms),
+            Some(_ego_vehicle_sensor_obstacle_detection_id),
+            Some(_obstacle_detection_sensor_keepalive),
+        )
+    } else {
+        (None, None, None)
+    };
 
     // -- Set up Zenoh session, subscribers and publishers --
     log::info!("Opening the Zenoh session...");
