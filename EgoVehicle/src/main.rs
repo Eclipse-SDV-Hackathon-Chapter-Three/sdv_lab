@@ -197,6 +197,8 @@ async fn main() {
         let transport_cb = Arc::clone(&transport_shared);
         let uuri = sensor_lane_invasion_uuri_shared.clone();
 
+        // -- handle LaneInvasion event
+
         async move {
             let umsg = UMessageBuilder::publish(uuri)
                 .build()

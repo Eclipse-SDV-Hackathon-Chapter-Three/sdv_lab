@@ -999,6 +999,7 @@ dependencies = [
  "ctrlc",
  "log",
  "pretty_env_logger",
+ "serde",
  "tokio",
  "up-rust",
  "up-transport-zenoh",
