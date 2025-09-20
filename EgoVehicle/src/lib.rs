@@ -1,3 +1,2 @@
-pub mod sensor_comms;
-
+pub mod sensors;
 pub mod args;

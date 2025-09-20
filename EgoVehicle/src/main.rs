@@ -18,15 +18,12 @@ use carla::client::{ActorBase, Client};
 use clap::Parser;
 use ego_vehicle::args::Args;
 use log;
-use std::convert::TryInto;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use zenoh::{Config, bytes::Encoding, key_expr::KeyExpr};
-use ego_vehicle::sensor_comms::{Listen, SensorComms};
-use carla::client::Sensor as CarlaSensor;
+use ego_vehicle::sensors::{LaneInvasion, SensorComms};
 use carla::sensor::data::LaneInvasionEvent;
-use carla::sensor::SensorData; // enum that Sensor::listen emits
 
 // General constants
 const CLIENT_TIME_MS: u64 = 5_000;
@@ -44,27 +41,6 @@ const MAX_THROTTLE: f32 = 1.0;
 const MAX_STEERING: f32 = 1.0;
 const MAX_BRAKING: f32 = 1.0;
 
-/// Typed view over a CARLA Sensor that emits `LaneInvasionEvent`.
-struct LaneInvasion<'a>(&'a CarlaSensor);
-
-impl<'a> Listen for LaneInvasion<'a> {
-    type Data = LaneInvasionEvent;
-
-    fn listen<F>(&self, f: F)
-    where
-        F: FnMut(Self::Data) + Send + 'static,
-    {
-        // CARLA expects FnMut(SensorData), so adapt here:
-        let mut f = f;
-        self.0.listen(move |data: SensorData| {
-            if let Ok(evt) = data.try_into() {
-                f(evt);
-            } else {
-                log::warn!("Received non LaneInvasionEvent");
-            }
-        });
-    }
-}
 
 #[tokio::main]
 async fn main() {
