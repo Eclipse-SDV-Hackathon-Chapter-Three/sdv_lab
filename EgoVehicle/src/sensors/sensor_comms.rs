@@ -1,14 +1,12 @@
+use std::future::Future;
 use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::{self, JoinHandle};
 use std::thread::ThreadId;
 
-/// Crate-local abstraction for “something you can listen to”.
-/// Each implementor picks a concrete payload type via an associated type.
 pub trait Listen {
     type Data: Send + 'static;
 
-    /// Hook a listener. The callback may mutate internal state, so it’s FnMut.
     fn listen<F>(&self, f: F)
     where
         F: FnMut(Self::Data) + Send + 'static;
@@ -19,6 +17,7 @@ pub struct SensorComms {
     tx: Sender<Message>,
     handle: Option<JoinHandle<()>>,
     worker_thread_id: ThreadId,
+    rt: tokio::runtime::Handle,
 }
 
 enum Message {
@@ -27,8 +26,14 @@ enum Message {
 }
 
 impl SensorComms {
-    /// Spawn a single worker thread to run heavy jobs.
+    /// Requires being called on a Tokio runtime (so we can grab Handle::current()).
     pub fn new(name: impl Into<String>) -> Self {
+        let rt = tokio::runtime::Handle::try_current()
+            .expect("SensorComms::new must be called on a Tokio runtime");
+        Self::new_with_runtime(name, rt)
+    }
+
+    pub fn new_with_runtime(name: impl Into<String>, rt: tokio::runtime::Handle) -> Self {
         let name = name.into();
         let (tx, rx) = mpsc::channel::<Message>();
 
@@ -38,7 +43,6 @@ impl SensorComms {
             .spawn(move || worker_loop(rx))
             .expect("failed to spawn SensorComms worker");
 
-        // Capture the worker thread id for Drop-time deadlock avoidance.
         let worker_thread_id = handle.thread().id();
 
         Self {
@@ -46,12 +50,11 @@ impl SensorComms {
             tx,
             handle: Some(handle),
             worker_thread_id,
+            rt,
         }
     }
 
-    /// Wire a typed sensor to this worker. You supply the handler for `S::Data`.
-    ///
-    /// We keep the CARLA callback cheap; heavy work is pushed to the worker thread.
+    /// Synchronous handler variant (kept for convenience).
     pub fn listen_on<S, H>(&self, sensor: &S, handler: H)
     where
         S: Listen,
@@ -59,11 +62,9 @@ impl SensorComms {
     {
         let tx = self.tx.clone();
         let handler = Arc::new(Mutex::new(handler));
-
         sensor.listen({
             let handler = Arc::clone(&handler);
             move |data: S::Data| {
-                // Enqueue heavy work onto the worker thread.
                 let handler = Arc::clone(&handler);
                 let _ = tx.send(Message::Job(Box::new(move || {
                     if let Ok(mut h) = handler.lock() {
@@ -73,20 +74,42 @@ impl SensorComms {
             }
         });
     }
+
+    /// Async handler variant. Your handler returns a Future; we spawn it on the stored Tokio runtime.
+    pub fn listen_on_async<S, H, Fut>(&self, sensor: &S, handler: H)
+    where
+        S: Listen,
+        H: Fn(S::Data) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = ()> + Send + 'static,
+    {
+        let tx = self.tx.clone();
+        let rt = self.rt.clone();
+        let handler = Arc::new(handler);
+
+        sensor.listen({
+            let handler = Arc::clone(&handler);
+            let rt = rt.clone();
+            move |data: S::Data| {
+                // Keep CARLA’s callback super light: just enqueue a job.
+                let handler = Arc::clone(&handler);
+                let rt = rt.clone();
+                let _ = tx.send(Message::Job(Box::new(move || {
+                    // Build the future and spawn it on Tokio.
+                    let fut = (handler)(data);
+                    rt.spawn(async move { fut.await });
+                })));
+            }
+        });
+    }
 }
 
 impl Drop for SensorComms {
     fn drop(&mut self) {
-        // Try to signal the worker to exit. Ignore errors if it already died.
         let _ = self.tx.send(Message::Shutdown);
-
-        // Avoid deadlocking by joining from the same thread as the worker.
         if std::thread::current().id() != self.worker_thread_id {
             if let Some(handle) = self.handle.take() {
-                let _ = handle.join(); // ignore poison/err on shutdown
+                let _ = handle.join();
             }
-        } else {
-            // If we are the worker thread, we cannot join ourselves—just exit.
         }
     }
 }

@@ -15,15 +15,17 @@
 //
 
 use carla::client::{ActorBase, Client};
+use carla::sensor::data::LaneInvasionEvent;
 use clap::Parser;
 use ego_vehicle::args::Args;
+use ego_vehicle::sensors::{LaneInvasion, SensorComms};
 use log;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use up_rust::{UTransport, UMessageBuilder, UUri};
+use up_transport_zenoh::UPTransportZenoh;
 use zenoh::{Config, bytes::Encoding, key_expr::KeyExpr};
-use ego_vehicle::sensors::{LaneInvasion, SensorComms};
-use carla::sensor::data::LaneInvasionEvent;
 
 // General constants
 const CLIENT_TIME_MS: u64 = 5_000;
@@ -41,10 +43,9 @@ const MAX_THROTTLE: f32 = 1.0;
 const MAX_STEERING: f32 = 1.0;
 const MAX_BRAKING: f32 = 1.0;
 
-
 #[tokio::main]
 async fn main() {
-    // Parse command line arguments
+    // -- Parse command line arguments --
     let args = Args::parse();
 
     // Initiate logging
@@ -59,6 +60,17 @@ async fn main() {
         running_clone.store(false, Ordering::SeqCst);
     })
     .expect("Error setting Ctrl-C handler");
+
+    // -- uProtocol over Zenoh configuration
+    let transport: Arc<dyn UTransport> = Arc::new(
+        UPTransportZenoh::builder("adas_compute")
+            .expect("authority not accepted!")
+            .build(/* ... building for now without configuration ... */)
+            .await
+            .expect("unable to build UPTransportZenoh"),
+    );
+
+    // -- CARLA configuration --
 
     // Connect to the Carla Server
     log::info!(
@@ -98,8 +110,14 @@ async fn main() {
         // Check if the Ego Vehicle actor exists in the world
         for actor in carla_world.actors().iter() {
             for attribute in actor.attributes().iter() {
-                if attribute.id() == "role_name" && attribute.value_string() == args.ego_vehicle_role {
-                    log::info!("Found '{}' actor with id: {}", args.ego_vehicle_role, actor.id());
+                if attribute.id() == "role_name"
+                    && attribute.value_string() == args.ego_vehicle_role
+                {
+                    log::info!(
+                        "Found '{}' actor with id: {}",
+                        args.ego_vehicle_role,
+                        actor.id()
+                    );
                     ego_vehicle_id = Some(actor.id());
                     break;
                 }
@@ -122,8 +140,14 @@ async fn main() {
         // Check if the Ego Vehicle actor exists in the world
         for actor in carla_world.actors().iter() {
             for attribute in actor.attributes().iter() {
-                if attribute.id() == "role_name" && attribute.value_string() == args.ego_vehicle_sensor_lane_invasion_role {
-                    log::info!("Found '{}' actor with id: {}", args.ego_vehicle_sensor_lane_invasion_role, actor.id());
+                if attribute.id() == "role_name"
+                    && attribute.value_string() == args.ego_vehicle_sensor_lane_invasion_role
+                {
+                    log::info!(
+                        "Found '{}' actor with id: {}",
+                        args.ego_vehicle_sensor_lane_invasion_role,
+                        actor.id()
+                    );
                     ego_vehicle_sensor_lane_invasion_id = Some(actor.id());
 
                     break;
@@ -137,8 +161,13 @@ async fn main() {
 
     // scoping this for now, may spin off into a function
     let sensor_lane_invasion = {
-        let Some(sensor_lane_invasion) = carla_world.actor(ego_vehicle_sensor_lane_invasion_id.unwrap()) else {
-            panic!("Unable to locate the sensor_lane_invasion via its id: {:?}", ego_vehicle_sensor_lane_invasion_id);
+        let Some(sensor_lane_invasion) =
+            carla_world.actor(ego_vehicle_sensor_lane_invasion_id.unwrap())
+        else {
+            panic!(
+                "Unable to locate the sensor_lane_invasion via its id: {:?}",
+                ego_vehicle_sensor_lane_invasion_id
+            );
         };
 
         let Ok(sensor_lane_invasion) = sensor_lane_invasion.into_kinds().try_into_sensor() else {
@@ -148,20 +177,42 @@ async fn main() {
         sensor_lane_invasion
     };
 
-    // Create the worker.
+    // Create the SensorComms for the LaneInvasion sensor
     let comms = SensorComms::new("front");
 
-    // Wrap the CARLA sensor with a typed view.
-    let lane_sensor = LaneInvasion(&sensor_lane_invasion);
+    // Wrap the CARLA sensor with a typed view for capturing LaneInvasionEvents
+    let sensor_lane_invasion = LaneInvasion(&sensor_lane_invasion);
 
-    // Attach the listener with a typed handler. Heavy work runs on the worker thread.
-    comms.listen_on(&lane_sensor, |evt: LaneInvasionEvent| {
-        // Do your decoding / storage / network IO here:
-        println!("processing on worker thread: {:?}", evt);
-        // do_heavy_work(evt);
+    // Precompute the UUri once (outside the callback)
+    let sensor_lane_invasion_uuri = UUri::try_from_parts("adas_compute", 0x0000_5a6b, 0x01, 0x0001)
+        .expect("Invalid UUri");
+
+    // Keep shared handles we’ll capture in the handler
+    let transport_shared = Arc::clone(&transport);
+    let sensor_lane_invasion_uuri_shared = sensor_lane_invasion_uuri.clone(); // only if UUri: Clone (see below)
+
+    // Attach the listener with an async handler
+    comms.listen_on_async(&sensor_lane_invasion, move |evt: LaneInvasionEvent| {
+        // Per-call: one cheap Arc clone; clone UUri if `publish` takes it by value
+        let transport_cb = Arc::clone(&transport_shared);
+        let uuri = sensor_lane_invasion_uuri_shared.clone();
+
+        async move {
+            let umsg = UMessageBuilder::publish(uuri)
+                .build()
+                .expect("unable to build publish message");
+
+            if let Err(err) = transport_cb.send(umsg).await {
+                log::error!("transport send failed: {:?}", err);
+            }
+
+            // Do your decoding / storage / network IO here:
+            println!("processing on worker thread: {:?}", evt);
+            // do_heavy_work(evt);
+        }
     });
 
-    // Set up Zenoh session, subscribers and publishers
+    // -- Set up Zenoh session, subscribers and publishers --
     log::info!("Opening the Zenoh session...");
 
     let zenoh_string = if let Some(router) = &args.router {

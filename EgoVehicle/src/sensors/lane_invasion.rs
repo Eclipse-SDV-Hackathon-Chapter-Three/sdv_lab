@@ -1,7 +1,7 @@
-use carla::client::Sensor as CarlaSensor;
-use carla::sensor::data::LaneInvasionEvent;
-use carla::sensor::SensorData; // enum that Sensor::listen emits
 use crate::sensors::Listen;
+use carla::client::Sensor as CarlaSensor;
+use carla::sensor::SensorData; // enum that Sensor::listen emits
+use carla::sensor::data::LaneInvasionEvent;
 
 /// Typed view over a CARLA Sensor that emits `LaneInvasionEvent`.
 pub struct LaneInvasion<'a>(pub &'a CarlaSensor);

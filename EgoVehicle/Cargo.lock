@@ -1001,6 +1001,7 @@ dependencies = [
  "pretty_env_logger",
  "tokio",
  "up-rust",
+ "up-transport-zenoh",
  "zenoh",
 ]
 
@@ -3980,6 +3981,22 @@ dependencies = [
  "tracing",
  "uriparse",
  "uuid-simd",
+]
+
+[[package]]
+name = "up-transport-zenoh"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "188eb5414d6afda18309c192a4d68ea14c28d7b1f8223e64b0bdda60377e0fff"
+dependencies = [
+ "anyhow",
+ "async-trait",
+ "bytes",
+ "protobuf",
+ "tokio",
+ "tracing",
+ "up-rust",
+ "zenoh",
 ]
 
 [[package]]
