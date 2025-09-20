@@ -1,3 +1,4 @@
+use crate::helpers::ViewFactory;
 use crate::sensors::Listen;
 use crate::sensors::actor::{ActorSerDe, Vector3DSerDe};
 use carla::client::Sensor as CarlaSensor;
@@ -24,6 +25,15 @@ impl<'a> Listen for Collision<'a> {
                 log::warn!("Received non CollisionEvent");
             }
         });
+    }
+}
+
+pub struct CollisionFactory;
+
+impl ViewFactory for CollisionFactory {
+    type View<'a> = Collision<'a>;
+    fn make<'a>(&self, s: &'a CarlaSensor) -> Self::View<'a> {
+        Collision(s)
     }
 }
 

@@ -15,12 +15,12 @@
 //
 
 use carla::client::{ActorBase, Client};
-use carla::sensor::data::LaneInvasionEvent;
+use carla::sensor::data::{CollisionEvent, LaneInvasionEvent};
 use clap::Parser;
 use ego_vehicle::args::Args;
-use ego_vehicle::helpers::{setup_sensor_with_transport};
+use ego_vehicle::helpers::setup_sensor_with_transport;
 use ego_vehicle::sensors::{
-    LaneInvasionEventSerDe, LaneInvasionFactory,
+    CollisionEventSerDe, CollisionFactory, LaneInvasionEventSerDe, LaneInvasionFactory,
 };
 use log;
 use serde_json;
@@ -133,31 +133,83 @@ async fn main() {
     }
 
     // -- Set up Sensor for Lane Invasion -- (generic)
-    let uuri =
-        UUri::try_from_parts("adas_compute", 0x0000_5a6b, 0x01, 0x0001).expect("Invalid UUri");
+    let (_lane_comms, _ego_vehicle_sensor_lane_invasion_id, _lane_sensor_keepalive) =
+        if let Some(ego_vehicle_sensor_lane_invasion_role) =
+            args.ego_vehicle_sensor_lane_invasion_role
+        {
+            let uuri = UUri::try_from_parts("adas_compute", 0x0000_5a6b, 0x01, 0x0001)
+                .expect("Invalid UUri");
 
-    // Encoder: LaneInvasionEvent -> Vec<u8>
-    let encode = |evt: LaneInvasionEvent| {
-        let serde_evt: LaneInvasionEventSerDe = evt.into();
-        serde_json::to_vec(&serde_evt).map_err(|e| e.into())
-    };
+            // Encoder: LaneInvasionEvent -> Vec<u8>
+            let encode = |evt: LaneInvasionEvent| {
+                let serde_evt: LaneInvasionEventSerDe = evt.into();
+                serde_json::to_vec(&serde_evt).map_err(|e| e.into())
+            };
 
-    let (_comms, lane_actor_id, _lane_sensor_keepalive) = setup_sensor_with_transport(
-        &carla_world,
-        &running,
-        &args.ego_vehicle_sensor_lane_invasion_role,
-        "front",
-        POLLING_EGO_MS,
-        LaneInvasionFactory, // <-- factory instead of closure
-        uuri,
-        encode,
-        UPayloadFormat::UPAYLOAD_FORMAT_JSON,
-        Arc::clone(&transport),
-    )
-    .await
-    .expect("Unable to set up sensor with transport");
+            let (_lane_comms, lane_actor_id, _lane_sensor_keepalive) = setup_sensor_with_transport(
+                &carla_world,
+                &running,
+                &ego_vehicle_sensor_lane_invasion_role,
+                "lane_invasion_sensor",
+                POLLING_EGO_MS,
+                LaneInvasionFactory,
+                uuri,
+                encode,
+                UPayloadFormat::UPAYLOAD_FORMAT_JSON,
+                Arc::clone(&transport),
+            )
+            .await
+            .expect("Unable to set up lane sensor with transport");
 
-    let _ego_vehicle_sensor_lane_invasion_id = Some(lane_actor_id);
+            let _ego_vehicle_sensor_lane_invasion_id = Some(lane_actor_id);
+
+            (
+                Some(_lane_comms),
+                Some(_ego_vehicle_sensor_lane_invasion_id),
+                Some(_lane_sensor_keepalive),
+            )
+        } else {
+            (None, None, None)
+        };
+
+    // -- Set up Sensor for Collision -- (generic)
+    let (_collision_comms, _ego_vehicle_sensor_collision_id, _collision_sensor_keepalive) =
+        if let Some(ego_vehicle_sensor_collision_role) = args.ego_vehicle_sensor_collision_role {
+            let uuri = UUri::try_from_parts("adas_compute", 0x0000_5a6b, 0x01, 0x0002)
+                .expect("Invalid UUri");
+
+            // Encoder: CollisionEvent -> Vec<u8>
+            let encode = |evt: CollisionEvent| {
+                let serde_evt: CollisionEventSerDe = evt.into();
+                serde_json::to_vec(&serde_evt).map_err(|e| e.into())
+            };
+
+            let (_collision_comms, collision_actor_id, _collision_sensor_keepalive) =
+                setup_sensor_with_transport(
+                    &carla_world,
+                    &running,
+                    &ego_vehicle_sensor_collision_role,
+                    "collision_sensor",
+                    POLLING_EGO_MS,
+                    CollisionFactory,
+                    uuri,
+                    encode,
+                    UPayloadFormat::UPAYLOAD_FORMAT_JSON,
+                    Arc::clone(&transport),
+                )
+                .await
+                .expect("Unable to set up sensor with transport");
+
+            let _ego_vehicle_sensor_collision_id = Some(collision_actor_id);
+
+            (
+                Some(_collision_comms),
+                Some(_ego_vehicle_sensor_collision_id),
+                Some(_collision_sensor_keepalive),
+            )
+        } else {
+            (None, None, None)
+        };
 
     // -- Set up Zenoh session, subscribers and publishers --
     log::info!("Opening the Zenoh session...");
