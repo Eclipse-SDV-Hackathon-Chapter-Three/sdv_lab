@@ -15,7 +15,7 @@
 #
 
 [package]
-name = "zenoh-vehicle"
+name = "ego-vehicle"
 version = "0.1.0"
 edition = "2024"
 
@@ -26,6 +26,7 @@ ctrlc = "3.4"
 log = "0.4"
 pretty_env_logger = "0.4"
 tokio = { version = "1", features = ["full"] }
+up-rust = { version = "0.7.0" }
 zenoh = { version = "1.0.0-rc.2" }
 
 [patch.crates-io]

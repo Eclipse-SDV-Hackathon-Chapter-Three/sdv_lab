@@ -15,15 +15,18 @@
 //
 
 use carla::client::{ActorBase, Client};
-
 use clap::Parser;
+use ego_vehicle::args::Args;
 use log;
-
-use std::sync::{Arc, Mutex};
+use std::convert::TryInto;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
-
-use zenoh::{bytes::Encoding, key_expr::KeyExpr, Config};
+use zenoh::{Config, bytes::Encoding, key_expr::KeyExpr};
+use ego_vehicle::sensor_comms::{Listen, SensorComms};
+use carla::client::Sensor as CarlaSensor;
+use carla::sensor::data::LaneInvasionEvent;
+use carla::sensor::SensorData; // enum that Sensor::listen emits
 
 // General constants
 const CLIENT_TIME_MS: u64 = 5_000;
@@ -31,29 +34,36 @@ const POLLING_EGO_MS: u64 = 1_000;
 const WAITING_PUB_MS: u64 = 1;
 
 // Vehicle control constants
-const MIN_THROTTLE: f32 =  0.0;
+const MIN_THROTTLE: f32 = 0.0;
 const MIN_STEERING: f32 = -1.0;
-const MIN_BRAKING:  f32 =  0.0;
+const MIN_BRAKING: f32 = 0.0;
 
 const MID_STEERING: f32 = 0.0;
 
 const MAX_THROTTLE: f32 = 1.0;
 const MAX_STEERING: f32 = 1.0;
-const MAX_BRAKING:  f32 = 1.0;
+const MAX_BRAKING: f32 = 1.0;
 
-#[derive(Parser, Debug)]
-#[clap(author, version, about, long_about = None)]
-struct Args {
-    #[clap(long, default_value = "127.0.0.1")]
-    host: String,
-    #[clap(long, default_value_t = 2000)]
-    port: u16,
-    #[clap(long, default_value = "ego_vehicle")]
-    role: String,
-    #[clap(long, default_value_t = 0.100)]
-    delta: f64,
-    #[clap(long, default_value = None)]
-    router: Option<String>,
+/// Typed view over a CARLA Sensor that emits `LaneInvasionEvent`.
+struct LaneInvasion<'a>(&'a CarlaSensor);
+
+impl<'a> Listen for LaneInvasion<'a> {
+    type Data = LaneInvasionEvent;
+
+    fn listen<F>(&self, f: F)
+    where
+        F: FnMut(Self::Data) + Send + 'static,
+    {
+        // CARLA expects FnMut(SensorData), so adapt here:
+        let mut f = f;
+        self.0.listen(move |data: SensorData| {
+            if let Ok(evt) = data.try_into() {
+                f(evt);
+            } else {
+                log::warn!("Received non LaneInvasionEvent");
+            }
+        });
+    }
 }
 
 #[tokio::main]
@@ -71,10 +81,15 @@ async fn main() {
     ctrlc::set_handler(move || {
         log::warn!("Cancelled by user. Bye!");
         running_clone.store(false, Ordering::SeqCst);
-    }).expect("Error setting Ctrl-C handler");
+    })
+    .expect("Error setting Ctrl-C handler");
 
     // Connect to the Carla Server
-    log::info!("Connecting to the Carla Server at {}:{}...", args.host, args.port);
+    log::info!(
+        "Connecting to the Carla Server at {}:{}...",
+        args.host,
+        args.port
+    );
 
     let mut carla_client = Client::connect(&args.host, args.port, None);
 
@@ -91,8 +106,9 @@ async fn main() {
 
     log::info!(
         "World Settings: Synchronous mode: {}, Fixed delta seconds: {:?}",
-         carla_settings.synchronous_mode, carla_settings.fixed_delta_seconds
-     );
+        carla_settings.synchronous_mode,
+        carla_settings.fixed_delta_seconds
+    );
 
     // Wait for the Ego Vehicle actor
     let mut ego_vehicle_id: Option<u32> = None;
@@ -106,8 +122,8 @@ async fn main() {
         // Check if the Ego Vehicle actor exists in the world
         for actor in carla_world.actors().iter() {
             for attribute in actor.attributes().iter() {
-                if attribute.id() == "role_name" && attribute.value_string() == args.role {
-                    log::info!("Found '{}' actor with id: {}", args.role, actor.id());
+                if attribute.id() == "role_name" && attribute.value_string() == args.ego_vehicle_role {
+                    log::info!("Found '{}' actor with id: {}", args.ego_vehicle_role, actor.id());
                     ego_vehicle_id = Some(actor.id());
                     break;
                 }
@@ -118,11 +134,65 @@ async fn main() {
         tokio::time::sleep(Duration::from_millis(POLLING_EGO_MS)).await;
     }
 
+    // Wait for the Ego Vehicle sensor
+    let mut ego_vehicle_sensor_lane_invasion_id: Option<u32> = None;
+
+    while running.load(Ordering::SeqCst) && ego_vehicle_sensor_lane_invasion_id.is_none() {
+        log::info!("Waiting for the Ego Vehicle sensor: lane invasion...");
+
+        // Syncronize Carla's world
+        let _ = carla_world.wait_for_tick();
+
+        // Check if the Ego Vehicle actor exists in the world
+        for actor in carla_world.actors().iter() {
+            for attribute in actor.attributes().iter() {
+                if attribute.id() == "role_name" && attribute.value_string() == args.ego_vehicle_sensor_lane_invasion_role {
+                    log::info!("Found '{}' actor with id: {}", args.ego_vehicle_sensor_lane_invasion_role, actor.id());
+                    ego_vehicle_sensor_lane_invasion_id = Some(actor.id());
+
+                    break;
+                }
+            }
+        }
+
+        // Sleep to avoid busy-waiting
+        tokio::time::sleep(Duration::from_millis(POLLING_EGO_MS)).await;
+    }
+
+    // scoping this for now, may spin off into a function
+    let sensor_lane_invasion = {
+        let Some(sensor_lane_invasion) = carla_world.actor(ego_vehicle_sensor_lane_invasion_id.unwrap()) else {
+            panic!("Unable to locate the sensor_lane_invasion via its id: {:?}", ego_vehicle_sensor_lane_invasion_id);
+        };
+
+        let Ok(sensor_lane_invasion) = sensor_lane_invasion.into_kinds().try_into_sensor() else {
+            panic!("Unable to turn sensor_lane_invasion actor into a sensor");
+        };
+
+        sensor_lane_invasion
+    };
+
+    // Create the worker.
+    let comms = SensorComms::new("front");
+
+    // Wrap the CARLA sensor with a typed view.
+    let lane_sensor = LaneInvasion(&sensor_lane_invasion);
+
+    // Attach the listener with a typed handler. Heavy work runs on the worker thread.
+    comms.listen_on(&lane_sensor, |evt: LaneInvasionEvent| {
+        // Do your decoding / storage / network IO here:
+        println!("processing on worker thread: {:?}", evt);
+        // do_heavy_work(evt);
+    });
+
     // Set up Zenoh session, subscribers and publishers
     log::info!("Opening the Zenoh session...");
 
     let zenoh_string = if let Some(router) = &args.router {
-        format!("{{ mode: 'peer', connect: {{ endpoints: [ 'tcp/{}:7447' ] }} }}", router)
+        format!(
+            "{{ mode: 'peer', connect: {{ endpoints: [ 'tcp/{}:7447' ] }} }}",
+            router
+        )
     } else {
         "{ mode: 'peer' }".to_string()
     };
@@ -134,31 +204,46 @@ async fn main() {
     let zenoh_session = zenoh::open(zenoh_config).await.unwrap();
 
     // Subscribe topics
-    let topic_throttle   = KeyExpr::new("vehicle/status/throttle_status").unwrap();
-    let topic_steering   = KeyExpr::new("vehicle/status/steering_status").unwrap();
-    let topic_braking    = KeyExpr::new("vehicle/status/braking_status").unwrap();
-    let topic_actuation  = KeyExpr::new("control/command/actuation_cmd").unwrap();
-    let topic_engage     = KeyExpr::new("adas/cruise_control/engage").unwrap();
+    let topic_throttle = KeyExpr::new("vehicle/status/throttle_status").unwrap();
+    let topic_steering = KeyExpr::new("vehicle/status/steering_status").unwrap();
+    let topic_braking = KeyExpr::new("vehicle/status/braking_status").unwrap();
+    let topic_actuation = KeyExpr::new("control/command/actuation_cmd").unwrap();
+    let topic_engage = KeyExpr::new("adas/cruise_control/engage").unwrap();
 
     log::info!("Declaring Subscriber on '{}'...", &topic_throttle);
 
-    let mut _subscriber_throttle = zenoh_session.declare_subscriber(&topic_throttle).await.unwrap();
+    let mut _subscriber_throttle = zenoh_session
+        .declare_subscriber(&topic_throttle)
+        .await
+        .unwrap();
 
     log::info!("Declaring Subscriber on '{}'...", &topic_steering);
 
-    let mut _subscriber_steering = zenoh_session.declare_subscriber(&topic_steering).await.unwrap();
+    let mut _subscriber_steering = zenoh_session
+        .declare_subscriber(&topic_steering)
+        .await
+        .unwrap();
 
     log::info!("Declaring Subscriber on '{}'...", &topic_braking);
 
-    let mut _subscriber_braking = zenoh_session.declare_subscriber(&topic_braking).await.unwrap();
+    let mut _subscriber_braking = zenoh_session
+        .declare_subscriber(&topic_braking)
+        .await
+        .unwrap();
 
     log::info!("Declaring Subscriber on '{}'...", &topic_actuation);
 
-    let mut _subscriber_actuation = zenoh_session.declare_subscriber(&topic_actuation).await.unwrap();
+    let mut _subscriber_actuation = zenoh_session
+        .declare_subscriber(&topic_actuation)
+        .await
+        .unwrap();
 
     log::info!("Declaring Subscriber on '{}'...", &topic_engage);
 
-    let mut _subscriber_engage = zenoh_session.declare_subscriber(&topic_engage).await.unwrap();
+    let mut _subscriber_engage = zenoh_session
+        .declare_subscriber(&topic_engage)
+        .await
+        .unwrap();
 
     // Attach a callback to the subscriber to handle incoming messages
     let throttle_sts: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
@@ -262,14 +347,17 @@ async fn main() {
     });
 
     // Publish topics
-    let topic_clock    = KeyExpr::new("vehicle/status/clock_status").unwrap();
+    let topic_clock = KeyExpr::new("vehicle/status/clock_status").unwrap();
     let topic_velocity = KeyExpr::new("vehicle/status/velocity_status").unwrap();
 
     log::info!("Declaring a Zenoh Publisher on '{topic_clock}'...");
     log::info!("Declaring a Zenoh Publisher on '{topic_velocity}'...");
 
     let publisher_clock = zenoh_session.declare_publisher(&topic_clock).await.unwrap();
-    let publisher_velocity = zenoh_session.declare_publisher(&topic_velocity).await.unwrap();
+    let publisher_velocity = zenoh_session
+        .declare_publisher(&topic_velocity)
+        .await
+        .unwrap();
 
     let topic_clock_str = topic_clock.to_string();
     let topic_velocity_str = topic_velocity.to_string();
@@ -278,9 +366,15 @@ async fn main() {
         .matching_listener()
         .callback(move |matching_status| {
             if matching_status.matching() {
-                log::info!("Publisher has at least one subscriber for '{}'.", topic_clock_str);
+                log::info!(
+                    "Publisher has at least one subscriber for '{}'.",
+                    topic_clock_str
+                );
             } else {
-                log::info!("Publisher has NO MORE subscribers for '{}'.", topic_clock_str);
+                log::info!(
+                    "Publisher has NO MORE subscribers for '{}'.",
+                    topic_clock_str
+                );
             }
         })
         .background()
@@ -291,9 +385,15 @@ async fn main() {
         .matching_listener()
         .callback(move |matching_status| {
             if matching_status.matching() {
-                log::info!("Publisher has at least one subscriber for '{}'.", topic_velocity_str);
+                log::info!(
+                    "Publisher has at least one subscriber for '{}'.",
+                    topic_velocity_str
+                );
             } else {
-                log::info!("Publisher has NO MORE subscribers for '{}'.", topic_velocity_str);
+                log::info!(
+                    "Publisher has NO MORE subscribers for '{}'.",
+                    topic_velocity_str
+                );
             }
         })
         .background()
@@ -404,11 +504,12 @@ async fn main() {
                 control.steer = steer;
                 control.brake = brake;
 
-
-                log::debug!("[to_carla] throttle={}, steer={}, brake={}",
+                log::debug!(
+                    "[to_carla] throttle={}, steer={}, brake={}",
                     control.throttle,
                     control.steer,
-                    control.brake);
+                    control.brake
+                );
 
                 ego_vehicle.apply_control(&control);
             } else {
