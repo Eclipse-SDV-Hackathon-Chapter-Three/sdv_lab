@@ -4,7 +4,6 @@ use crate::sensors::actor::ActorSerDe;
 use carla::client::Sensor as CarlaSensor;
 use carla::sensor::SensorData;
 use carla::sensor::data::ObstacleDetectionEvent;
-use serde::{Deserialize, Serialize};
 
 /// Typed view over a CARLA Sensor that emits `ColisionEvent`.
 pub struct ObstacleDetection<'a>(pub &'a CarlaSensor);
@@ -34,22 +33,5 @@ impl ViewFactory for ObstacleDetectionFactory {
     type View<'a> = ObstacleDetection<'a>;
     fn make<'a>(&self, s: &'a CarlaSensor) -> Self::View<'a> {
         ObstacleDetection(s)
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct ObstacleDetectionEventSerDe {
-    pub actor: ActorSerDe,
-    pub other_actor: ActorSerDe,
-    pub distance: f32,
-}
-
-impl From<ObstacleDetectionEvent> for ObstacleDetectionEventSerDe {
-    fn from(value: ObstacleDetectionEvent) -> Self {
-        ObstacleDetectionEventSerDe {
-            actor: value.actor().into(),
-            other_actor: value.other_actor().into(),
-            distance: value.distance().into(),
-        }
     }
 }

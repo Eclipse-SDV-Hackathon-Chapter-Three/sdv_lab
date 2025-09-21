@@ -24,11 +24,13 @@ use clap::Parser;
 use ego_vehicle::args::Args;
 use ego_vehicle::helpers::setup_sensor_with_transport;
 use ego_vehicle::sensors::{
-    CollisionEventSerDe, CollisionFactory, ImageEventSerBorrowed, ImageFactory,
-    LaneInvasionEventSerDe, LaneInvasionFactory, LidarMeasurementFactory,
-    LidarMeasurementSerBorrowed, ObstacleDetectionEventSerDe, ObstacleDetectionFactory,
-    RadarMeasurementFactory, RadarMeasurementSerBorrowed,
+    CollisionFactory, ImageFactory,
+    LaneInvasionFactory, LidarMeasurementFactory,
+    ObstacleDetectionFactory,
+    RadarMeasurementFactory,
 };
+use ego_vehicle::sensor_data_serde::{CollisionEventSerDe, ImageEventSerBorrowed, LaneInvasionEventSerDe, 
+    LidarMeasurementSerBorrowed, ObstacleDetectionEventSerDe, RadarMeasurementSerBorrowed};
 use log;
 use serde_json;
 use std::sync::atomic::{AtomicBool, Ordering};
