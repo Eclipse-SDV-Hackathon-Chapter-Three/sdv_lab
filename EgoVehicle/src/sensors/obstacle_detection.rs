@@ -1,6 +1,5 @@
 use crate::helpers::ViewFactory;
 use crate::sensors::Listen;
-use crate::sensors::actor::ActorSerDe;
 use carla::client::Sensor as CarlaSensor;
 use carla::sensor::SensorData;
 use carla::sensor::data::ObstacleDetectionEvent;

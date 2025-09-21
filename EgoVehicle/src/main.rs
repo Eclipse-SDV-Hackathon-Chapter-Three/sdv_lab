@@ -29,7 +29,7 @@ use ego_vehicle::sensors::{
     ObstacleDetectionFactory,
     RadarMeasurementFactory,
 };
-use ego_vehicle::sensor_data_serde::{CollisionEventSerDe, ImageEventSerBorrowed, LaneInvasionEventSerDe, 
+use carla_data_serde::{CollisionEventSerDe, ImageEventSerBorrowed, LaneInvasionEventSerDe, 
     LidarMeasurementSerBorrowed, ObstacleDetectionEventSerDe, RadarMeasurementSerBorrowed};
 use log;
 use serde_json;

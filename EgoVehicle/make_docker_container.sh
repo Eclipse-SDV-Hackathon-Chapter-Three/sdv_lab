@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
-set -euo pipefail
-sudo docker build -t sdvlab_egovehicle:0.2 \
-  --build-arg USER_UID="$(id -u)" \
-  --build-arg USER_GID="$(id -g)" \
-  .
+# Works whether you're using sudo or not
+UID=$(id -u "${SUDO_USER:-$USER}")
+GID=$(id -g "${SUDO_USER:-$USER}")
+
+docker build \
+  --build-arg USER_UID=$UID \
+  --build-arg USER_GID=$GID \
+  --build-arg USERNAME=dev \
+  -t sdv-dev .

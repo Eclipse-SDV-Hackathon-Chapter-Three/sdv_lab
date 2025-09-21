@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
-sudo docker run --rm -it \
-  --mount type=bind,source="$PWD",target="$PWD" \
-  -w "$PWD" \
-  sdvlab_egovehicle:0.2 bash
+docker run --rm -it \
+  -v "$PWD":/workspace \
+  -v "$SSH_AUTH_SOCK":/ssh-agent \
+  -e SSH_AUTH_SOCK=/ssh-agent \
+  sdv-dev bash

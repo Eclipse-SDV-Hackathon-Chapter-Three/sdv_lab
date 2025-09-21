@@ -1,10 +1,8 @@
 use crate::helpers::ViewFactory;
 use crate::sensors::Listen;
-use crate::sensors::actor::{ActorSerDe, Vector3DSerDe};
 use carla::client::Sensor as CarlaSensor;
 use carla::sensor::SensorData;
 use carla::sensor::data::CollisionEvent;
-use serde::{Deserialize, Serialize};
 
 /// Typed view over a CARLA Sensor that emits `ColisionEvent`.
 pub struct Collision<'a>(pub &'a CarlaSensor);

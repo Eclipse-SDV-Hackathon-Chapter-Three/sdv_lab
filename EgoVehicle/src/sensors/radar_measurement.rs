@@ -3,7 +3,7 @@ use crate::sensors::Listen;
 use carla::client::Sensor as CarlaSensor;
 use carla::sensor::SensorData;
 use carla::sensor::data::{
-    RadarDetection as CarlaRadarDetection, RadarMeasurement as RadarMeasurementEvent,
+    RadarMeasurement as RadarMeasurementEvent,
 };
 
 /// Typed view over a CARLA Sensor that emits `RadarMeasurementEvent`.

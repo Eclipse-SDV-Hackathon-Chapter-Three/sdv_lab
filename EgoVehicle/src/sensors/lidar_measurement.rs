@@ -1,10 +1,9 @@
 use crate::helpers::ViewFactory;
 use crate::sensors::Listen;
 use carla::client::Sensor as CarlaSensor;
-use carla::geom::Location as CarlaLocation;
 use carla::sensor::SensorData;
 use carla::sensor::data::{
-    LidarDetection as CarlaLidarDetection, LidarMeasurement as LidarMeasurementEvent,
+    LidarMeasurement as LidarMeasurementEvent,
 };
 
 /// Typed view over a CARLA Sensor that emits `LidarMeasurementEvent`.
