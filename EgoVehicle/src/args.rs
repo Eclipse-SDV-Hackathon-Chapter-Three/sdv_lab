@@ -17,6 +17,8 @@ pub struct Args {
     pub ego_vehicle_sensor_obstacle_detection_role: Option<String>,
     #[clap(long, default_value = "ego_vehicle_sensor_image")]
     pub ego_vehicle_sensor_image_role: Option<String>,
+    #[clap(long, default_value = "ego_vehicle_sensor_radar_measurement")]
+    pub ego_vehicle_sensor_radar_measurement_role: Option<String>,
     #[clap(long, default_value_t = 0.100)]
     pub delta: f64,
     #[clap(long, default_value = None)]

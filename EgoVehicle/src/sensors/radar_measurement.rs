@@ -3,8 +3,7 @@ use crate::sensors::Listen;
 use carla::client::Sensor as CarlaSensor;
 use carla::sensor::SensorData;
 use carla::sensor::data::{
-    RadarDetection as CarlaRadarDetection,
-    RadarMeasurement as RadarMeasurementEvent,
+    RadarDetection as CarlaRadarDetection, RadarMeasurement as RadarMeasurementEvent,
 };
 use serde::{Deserialize, Serialize};
 
@@ -39,15 +38,14 @@ impl ViewFactory for RadarMeasurementFactory {
     }
 }
 
-
 /// Remote schema for the foreign element type
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "carla::sensor::data::RadarDetection")]
 pub struct RadarDetectionRemote {
     pub velocity: f32,
-    pub azimuth:  f32,
+    pub azimuth: f32,
     pub altitude: f32,
-    pub depth:    f32,
+    pub depth: f32,
 }
 
 // -------------------- &[RadarDetection] (serialize-only) --------------------
@@ -62,7 +60,10 @@ mod slice_radar_detection_remote {
         }
     }
 
-    pub fn serialize<S: Serializer>(slice: &[CarlaRadarDetection], s: S) -> Result<S::Ok, S::Error> {
+    pub fn serialize<S: Serializer>(
+        slice: &[CarlaRadarDetection],
+        s: S,
+    ) -> Result<S::Ok, S::Error> {
         let mut seq = s.serialize_seq(Some(slice.len()))?;
         for d in slice {
             seq.serialize_element(&AsRemote(d))?;
@@ -95,9 +96,9 @@ impl<'a> From<&'a RadarMeasurementEvent> for RadarMeasurementSerBorrowed<'a> {
 // -------------------- Vec<RadarDetection> (round-trip) --------------------
 mod vec_radar_detection_remote {
     use super::*;
-    use serde::{Serializer, Deserializer};
-    use serde::ser::SerializeSeq;
     use serde::de::{SeqAccess, Visitor};
+    use serde::ser::SerializeSeq;
+    use serde::{Deserializer, Serializer};
     use std::fmt;
 
     struct AsRemote<'a>(&'a CarlaRadarDetection);
@@ -122,7 +123,9 @@ mod vec_radar_detection_remote {
         seq.end()
     }
 
-    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<CarlaRadarDetection>, D::Error> {
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        d: D,
+    ) -> Result<Vec<CarlaRadarDetection>, D::Error> {
         struct V;
         impl<'de> Visitor<'de> for V {
             type Value = Vec<CarlaRadarDetection>;
