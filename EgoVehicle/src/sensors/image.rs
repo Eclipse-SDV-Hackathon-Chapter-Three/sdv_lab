@@ -3,7 +3,7 @@ use crate::sensors::Listen;
 use carla::client::Sensor as CarlaSensor;
 use carla::sensor::SensorData;
 use carla::sensor::data::{Color, Image as ImageEvent};
-use ndarray::Array2;
+use ndarray::{Array2, ArrayView2};
 use serde::{Deserialize, Serialize};
 
 /// Typed view over a CARLA Sensor that emits `ImageEvent`.
@@ -37,6 +37,7 @@ impl ViewFactory for ImageFactory {
     }
 }
 
+/// Remote schema for the foreign element type
 #[derive(Serialize, Deserialize)]
 #[serde(remote = "carla::sensor::data::Color")]
 struct ColorRemote {
@@ -46,8 +47,73 @@ struct ColorRemote {
     a: u8,
 }
 
-// --- Field-level (de)serializer for Array2<Color> ---
-// Put this in the same module as your struct, so the path `self::array2_color_remote` resolves.
+// ---------------------------------------------------------------------
+// Borrowed, serialize-only for ArrayView2<Color>
+// ---------------------------------------------------------------------
+mod arrayview2_color_remote {
+    use super::*;
+    use serde::Serialize;
+    use serde::ser::{SerializeSeq, Serializer};
+
+    // Serialize &Color via the remote impl
+    struct ColorAsRemote<'a>(&'a Color);
+    impl<'a> Serialize for ColorAsRemote<'a> {
+        fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+            super::ColorRemote::serialize(self.0, s)
+        }
+    }
+
+    // Helper to serialize one row without allocating
+    struct Row<'a>(ndarray::ArrayView1<'a, Color>);
+    impl<'a> Serialize for Row<'a> {
+        fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+            let mut inner = s.serialize_seq(Some(self.0.len()))?;
+            for c in self.0.iter() {
+                inner.serialize_element(&ColorAsRemote(c))?;
+            }
+            inner.end()
+        }
+    }
+
+    // Serialize ArrayView2<Color> as a seq of rows (serialize-only)
+    pub fn serialize<S: Serializer>(arr: &ArrayView2<Color>, s: S) -> Result<S::Ok, S::Error> {
+        let (h, _) = arr.dim();
+        let mut outer = s.serialize_seq(Some(h))?;
+        for row in arr.rows() {
+            outer.serialize_element(&Row(row))?;
+        }
+        outer.end()
+    }
+}
+
+/// Borrowed, zero-copy serializer for Image
+#[derive(Serialize)]
+pub struct ImageEventSerBorrowed<'a> {
+    pub height: usize,
+    pub width: usize,
+    pub len: usize,
+    pub is_empty: bool,
+    pub fov_angle: f32,
+    #[serde(with = "self::arrayview2_color_remote")]
+    pub array: ArrayView2<'a, Color>,
+}
+
+impl<'a> From<&'a ImageEvent> for ImageEventSerBorrowed<'a> {
+    fn from(value: &'a ImageEvent) -> Self {
+        Self {
+            height: value.height(),
+            width: value.width(),
+            len: value.len(),
+            is_empty: value.is_empty(),
+            fov_angle: value.fov_angle(),
+            array: value.as_array(), // borrow, zero-copy
+        }
+    }
+}
+
+// ---------------------------------------------------------------------
+// Owned, round-trippable for Array2<Color>
+// ---------------------------------------------------------------------
 mod array2_color_remote {
     use super::*;
     use serde::de::{self, SeqAccess, Visitor};
@@ -124,7 +190,7 @@ mod array2_color_remote {
     }
 }
 
-// --- Your payload uses the original Color and points to the module above ---
+/// Owned, round-trip serializer for Image
 #[derive(Serialize, Deserialize)]
 pub struct ImageEventSerDe {
     pub height: usize,
@@ -138,13 +204,22 @@ pub struct ImageEventSerDe {
 
 impl From<ImageEvent> for ImageEventSerDe {
     fn from(value: ImageEvent) -> Self {
-        ImageEventSerDe {
+        // Build an owned Array2<Color> without requiring Clone by copying fields (u8s)
+        let view = value.as_array();
+        let array: Array2<Color> = view.map(|c| Color {
+            b: c.b,
+            g: c.g,
+            r: c.r,
+            a: c.a,
+        });
+
+        Self {
             height: value.height(),
             width: value.width(),
             len: value.len(),
             is_empty: value.is_empty(),
             fov_angle: value.fov_angle(),
-            array: value.as_array().to_owned(),
+            array,
         }
     }
 }

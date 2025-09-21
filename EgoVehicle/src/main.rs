@@ -23,9 +23,9 @@ use clap::Parser;
 use ego_vehicle::args::Args;
 use ego_vehicle::helpers::setup_sensor_with_transport;
 use ego_vehicle::sensors::{
-    CollisionEventSerDe, CollisionFactory, ImageEventSerDe, ImageFactory, LaneInvasionEventSerDe,
-    LaneInvasionFactory, ObstacleDetectionEventSerDe, ObstacleDetectionFactory,
-    RadarMeasurementFactory, RadarMeasurementSerBorrowed,
+    CollisionEventSerDe, CollisionFactory, ImageEventSerBorrowed, ImageFactory,
+    LaneInvasionEventSerDe, LaneInvasionFactory, ObstacleDetectionEventSerDe,
+    ObstacleDetectionFactory, RadarMeasurementFactory, RadarMeasurementSerBorrowed,
 };
 use log;
 use serde_json;
@@ -269,10 +269,12 @@ async fn main() {
             let uuri = UUri::try_from_parts("adas_compute", 0x0000_5a6b, 0x01, 0x0004)
                 .expect("Invalid UUri");
 
-            // Encoder: ImageEvent -> Vec<u8>
+            // Encoder: ImageEvent -> Vec<u8> (borrow-only)
             let encode = |evt: ImageEvent| {
-                let serde_evt: ImageEventSerDe = evt.into();
-                serde_json::to_vec(&serde_evt).map_err(|e| e.into())
+                // Borrow the event so the payload can serialize without copying the image buffer
+                let serde_evt: ImageEventSerBorrowed<'_> = (&evt).into();
+                serde_json::to_vec(&serde_evt)
+                    .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
             };
 
             let (_image_comms, image_actor_id, _image_sensor_keepalive) =
