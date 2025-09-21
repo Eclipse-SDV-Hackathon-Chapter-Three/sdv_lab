@@ -1,13 +1,12 @@
 use crate::helpers::ViewFactory;
 use crate::sensors::Listen;
 use carla::client::Sensor as CarlaSensor;
+use carla::geom::Location as CarlaLocation;
 use carla::sensor::SensorData;
 use carla::sensor::data::{
-    LidarDetection as CarlaLidarDetection,
-    LidarMeasurement as LidarMeasurementEvent,
+    LidarDetection as CarlaLidarDetection, LidarMeasurement as LidarMeasurementEvent,
 };
-use carla::geom::Location as CarlaLocation;
-use serde::{Serialize, Deserialize};
+use serde::{Deserialize, Serialize};
 
 /// Typed view over a CARLA Sensor that emits `LidarMeasurementEvent`.
 pub struct LidarMeasurement<'a>(pub &'a CarlaSensor);
@@ -51,7 +50,7 @@ pub struct LocationRemote {
 /// `with`-module for (de)serializing `CarlaLocation` by delegating to `LocationRemote`.
 mod location_with {
     use super::*;
-    use serde::{Serializer, Deserializer};
+    use serde::{Deserializer, Serializer};
 
     pub fn serialize<S: Serializer>(loc: &CarlaLocation, s: S) -> Result<S::Ok, S::Error> {
         super::LocationRemote::serialize(loc, s)
@@ -74,8 +73,8 @@ pub struct LidarDetectionRemote {
 // -------------------- &[LidarDetection] (serialize-only) --------------------
 mod slice_lidar_detection_remote {
     use super::*;
-    use serde::ser::{SerializeSeq, Serializer};
     use serde::Serialize;
+    use serde::ser::{SerializeSeq, Serializer};
 
     struct AsRemote<'a>(&'a CarlaLidarDetection);
     impl<'a> Serialize for AsRemote<'a> {
@@ -84,7 +83,10 @@ mod slice_lidar_detection_remote {
         }
     }
 
-    pub fn serialize<S: Serializer>(slice: &[CarlaLidarDetection], s: S) -> Result<S::Ok, S::Error> {
+    pub fn serialize<S: Serializer>(
+        slice: &[CarlaLidarDetection],
+        s: S,
+    ) -> Result<S::Ok, S::Error> {
         let mut seq = s.serialize_seq(Some(slice.len()))?;
         for d in slice {
             seq.serialize_element(&AsRemote(d))?;
@@ -119,10 +121,10 @@ impl<'a> From<&'a LidarMeasurementEvent> for LidarMeasurementSerBorrowed<'a> {
 // -------------------- Vec<LidarDetection> (round-trip) --------------------
 mod vec_lidar_detection_remote {
     use super::*;
-    use serde::{Serializer, Deserializer};
-    use serde::ser::SerializeSeq;
-    use serde::de::{SeqAccess, Visitor};
     use serde::Serialize;
+    use serde::de::{SeqAccess, Visitor};
+    use serde::ser::SerializeSeq;
+    use serde::{Deserializer, Serializer};
     use std::fmt;
 
     struct AsRemote<'a>(&'a CarlaLidarDetection);
@@ -147,7 +149,9 @@ mod vec_lidar_detection_remote {
         seq.end()
     }
 
-    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<CarlaLidarDetection>, D::Error> {
+    pub fn deserialize<'de, D: Deserializer<'de>>(
+        d: D,
+    ) -> Result<Vec<CarlaLidarDetection>, D::Error> {
         struct V;
         impl<'de> Visitor<'de> for V {
             type Value = Vec<CarlaLidarDetection>;
@@ -183,7 +187,11 @@ impl From<LidarMeasurementEvent> for LidarMeasurementSerDe {
             .as_slice()
             .iter()
             .map(|d| CarlaLidarDetection {
-                point: CarlaLocation { x: d.point.x, y: d.point.y, z: d.point.z },
+                point: CarlaLocation {
+                    x: d.point.x,
+                    y: d.point.y,
+                    z: d.point.z,
+                },
                 intensity: d.intensity,
             })
             .collect();

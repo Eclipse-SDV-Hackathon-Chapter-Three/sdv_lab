@@ -16,7 +16,8 @@
 
 use carla::client::{ActorBase, Client};
 use carla::sensor::data::{
-    CollisionEvent, Image as ImageEvent, LaneInvasionEvent, ObstacleDetectionEvent,
+    CollisionEvent, Image as ImageEvent, LaneInvasionEvent,
+    LidarMeasurement as LidarMeasurementEvent, ObstacleDetectionEvent,
     RadarMeasurement as RadarMeasurementEvent,
 };
 use clap::Parser;
@@ -24,8 +25,9 @@ use ego_vehicle::args::Args;
 use ego_vehicle::helpers::setup_sensor_with_transport;
 use ego_vehicle::sensors::{
     CollisionEventSerDe, CollisionFactory, ImageEventSerBorrowed, ImageFactory,
-    LaneInvasionEventSerDe, LaneInvasionFactory, ObstacleDetectionEventSerDe,
-    ObstacleDetectionFactory, RadarMeasurementFactory, RadarMeasurementSerBorrowed,
+    LaneInvasionEventSerDe, LaneInvasionFactory, LidarMeasurementFactory,
+    LidarMeasurementSerBorrowed, ObstacleDetectionEventSerDe, ObstacleDetectionFactory,
+    RadarMeasurementFactory, RadarMeasurementSerBorrowed,
 };
 use log;
 use serde_json;
@@ -348,6 +350,56 @@ async fn main() {
             Some(_radar_measurement_comms),
             Some(_ego_vehicle_sensor_radar_measurement_id),
             Some(_radar_measurement_sensor_keepalive),
+        )
+    } else {
+        (None, None, None)
+    };
+
+    // -- Set up Sensor for LidarMeasurement -- (generic)
+    let (
+        _lidar_measurement_comms,
+        _ego_vehicle_sensor_lidar_measurement_id,
+        _lidar_measurement_sensor_keepalive,
+    ) = if let Some(ego_vehicle_sensor_lidar_measurement_role) =
+        args.ego_vehicle_sensor_lidar_measurement_role
+    {
+        let uuri =
+            UUri::try_from_parts("adas_compute", 0x0000_5a6b, 0x01, 0x0006).expect("Invalid UUri"); // adjust last part if needed
+
+        // Encoder: LidarMeasurementEvent -> Vec<u8> (borrow-only)
+        let encode = |evt: LidarMeasurementEvent|
+            -> std::result::Result<Vec<u8>, Box<dyn std::error::Error + Send + Sync>>
+        {
+            let serde_evt: LidarMeasurementSerBorrowed<'_> = (&evt).into();
+            serde_json::to_vec(&serde_evt)
+                .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
+        };
+
+        let (
+            _lidar_measurement_comms,
+            lidar_measurement_actor_id,
+            _lidar_measurement_sensor_keepalive,
+        ) = setup_sensor_with_transport(
+            &carla_world,
+            &running,
+            &ego_vehicle_sensor_lidar_measurement_role,
+            "lidar_measurement_sensor",
+            POLLING_EGO_MS,
+            LidarMeasurementFactory,
+            uuri,
+            encode,
+            UPayloadFormat::UPAYLOAD_FORMAT_JSON,
+            Arc::clone(&transport),
+        )
+        .await
+        .expect("Unable to set up lidar measurement sensor with transport");
+
+        let _ego_vehicle_sensor_lidar_measurement_id = Some(lidar_measurement_actor_id);
+
+        (
+            Some(_lidar_measurement_comms),
+            Some(_ego_vehicle_sensor_lidar_measurement_id),
+            Some(_lidar_measurement_sensor_keepalive),
         )
     } else {
         (None, None, None)
