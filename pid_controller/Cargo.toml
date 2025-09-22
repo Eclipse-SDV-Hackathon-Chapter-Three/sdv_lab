@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 bytes = "1.0"
+clap = { version = "4.5", features = ["derive"] }
 tokio = { version = "1", features = ["full", "signal"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
@@ -24,9 +25,14 @@ zenoh = { version = "1.2.1", features = [
     "internal",
 ] }
 
+
 [[bin]]
 name = "pid_controller"
 path = "src/main.rs"
+
+[[bin]]
+name = "sim_pub"
+path = "src/simulator_pub.rs"
 
 [[bin]]
 name = "up_pub"

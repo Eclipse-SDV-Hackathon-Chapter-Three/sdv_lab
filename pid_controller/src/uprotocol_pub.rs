@@ -16,119 +16,281 @@
 
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::SystemTime;
-use tokio::time::{sleep, Duration};
-use rand::Rng;
-use log::{info, error};
+use clap::{Parser, Subcommand};
+use log::{info, error, warn};
+use serde::{Deserialize, Serialize};
 use up_rust::{UUri, UTransport, UMessageBuilder, UPayloadFormat};
 use up_transport_zenoh::UPTransportZenoh;
 use zenoh::config::{Config, EndPoint};
 
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Initialize logging
-    env_logger::init();
+#[derive(Parser, Debug)]
+#[clap(author, version, about = "uProtocol Publisher - Send messages to multiple URIs", long_about = None)]
+struct Args {
+    #[clap(subcommand)]
+    command: Commands,
     
-    info!("*** Started uProtocol Publisher");
+    #[clap(long, default_value = "127.0.0.1:7447", help = "Zenoh router endpoint")]
+    endpoint: String,
+    
+    #[clap(long, default_value = "Publisher", help = "Publisher authority name")]
+    authority: String,
+    
+    #[clap(long, default_value_t = 0x1000, help = "Publisher entity ID")]
+    entity_id: u32,
+    
+    #[clap(long, default_value_t = 1, help = "Publisher entity version major")]
+    version_major: u8,
+}
 
+
+#[derive(Subcommand, Debug)]
+enum Commands {
+    /// Publish messages to one or multiple URIs
+    Args {
+        #[clap(long, help = "Target URI (format: authority/ue_id/ue_version/resource_id)", action = clap::ArgAction::Append)]
+        uri: Vec<String>,
+        
+        #[clap(long, help = "Payload data to send", action = clap::ArgAction::Append)]
+        payload: Vec<String>,
+        
+        #[clap(long, help = "Payload format: text, json, protobuf", action = clap::ArgAction::Append)]
+        format: Vec<String>,
+    },
+    
+    /// Publish from a JSON file
+    File {
+        #[clap(long, help = "Path to JSON file containing URI-payload pairs")]
+        path: String,
+    },
+    
+    /// Interactive mode - publish multiple messages with prompts
+    Interactive,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct MessageData {
+    uri: String,
+    payload: String,
+    #[serde(default = "default_format")]
+    format: String,
+}
+
+fn default_format() -> String {
+    "text".to_string()
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+struct MultipleMessages {
+    messages: Vec<MessageData>,
+}
+
+#[derive(Debug)]
+struct ParsedMessage {
+    uri: String,
+    payload: String,
+    format: String,
+}
+
+fn parse_arguments(uris: Vec<String>, payloads: Vec<String>, formats: Vec<String>) -> Result<Vec<ParsedMessage>, String> {
+    if uris.len() != payloads.len() {
+        return Err(format!("Number of URIs ({}) must match number of payloads ({})", uris.len(), payloads.len()));
+    }
+    
+    let mut messages = Vec::new();
+    let default_format = "text".to_string();
+    
+    // Determine if we have a global format (last format applies to all)
+    let global_format = if formats.len() == 1 && uris.len() > 1 {
+        Some(formats[0].clone())
+    } else {
+        None
+    };
+    
+    for (i, (uri, payload)) in uris.iter().zip(payloads.iter()).enumerate() {
+        let format = if let Some(ref global_fmt) = global_format {
+            // Use global format
+            global_fmt.clone()
+        } else if i < formats.len() {
+            // Use individual format
+            formats[i].clone()
+        } else {
+            // Use default format
+            default_format.clone()
+        };
+        
+        messages.push(ParsedMessage {
+            uri: uri.clone(),
+            payload: payload.clone(),
+            format,
+        });
+    }
+    
+    Ok(messages)
+}
+
+fn parse_payload_format(format_str: &str) -> UPayloadFormat {
+    match format_str.to_lowercase().as_str() {
+        "json" => UPayloadFormat::UPAYLOAD_FORMAT_JSON,
+        "protobuf" | "proto" => UPayloadFormat::UPAYLOAD_FORMAT_PROTOBUF,
+        "text" | _ => UPayloadFormat::UPAYLOAD_FORMAT_TEXT,
+    }
+}
+
+async fn create_transport(endpoint: &str, authority: &str, entity_id: u32, version_major: u8) -> Result<Arc<dyn UTransport>, Box<dyn std::error::Error>> {
     // Configure Zenoh
     let mut zenoh_config = Config::default();
     zenoh_config
         .connect
         .endpoints
         .set(vec![
-            EndPoint::from_str("tcp/127.0.0.1:7447").expect("Unable to set endpoint"),
+            EndPoint::from_str(&format!("tcp/{}", endpoint)).expect("Unable to set endpoint"),
         ])
         .expect("Unable to set Zenoh Config");
 
-    // Create publisher entity URI - this represents the publisher itself
-    let publisher_uri = UUri::try_from_parts("Publisher", 0x1000, 1, 0)?;
+    // Create publisher entity URI
+    let publisher_uri = UUri::try_from_parts(authority, entity_id, version_major, 0)?;
     let publisher_uri_string: String = (&publisher_uri).into();
+
+    info!("Initializing uProtocol transport with publisher URI: {}", publisher_uri_string);
 
     // Initialize uProtocol transport with Zenoh
     let transport: Arc<dyn UTransport> = Arc::new(
         UPTransportZenoh::new(zenoh_config, publisher_uri_string).await?
     );
 
-    // Create URIs for publishing according to the mapping table
-    let clock_uri = UUri::try_from_parts("EGOVehicle", 0, 2, 0x8002)?;      // vehicle/status/clock_status
-    let velocity_uri = UUri::try_from_parts("EGOVehicle", 0, 2, 0x8001)?;   // vehicle/status/velocity_status
-    let target_uri = UUri::try_from_parts("AAOS", 0, 2, 0x8001)?;           // adas/cruise_control/target_speed
-    let engage_uri = UUri::try_from_parts("AAOS", 0, 2, 0x8002)?;           // adas/cruise_control/engage
+    Ok(transport)
+}
 
-    info!("uProtocol Publisher initialized with URIs:");
-    info!("  Clock: {}", String::from(&clock_uri));
-    info!("  Velocity: {}", String::from(&velocity_uri));
-    info!("  Target Speed: {}", String::from(&target_uri));
-    info!("  Engage: {}", String::from(&engage_uri));
-
-    #[allow(unused_mut)]
-    let mut engaged = 1;
-
-    loop {
-        let velocity = rand::rng().random_range(5.0..15.0);
-        let target = rand::rng().random_range(10.0..20.0);
-
-        // Getting system time as a timestamp in seconds
-        let current_time = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .unwrap()
-            .as_secs();
-
-        // Publish current timestamp
-        let clock_payload = format!("{}", current_time);
-        let message = UMessageBuilder::publish(clock_uri.clone())
-            .build_with_payload(clock_payload.clone(), UPayloadFormat::UPAYLOAD_FORMAT_TEXT)
-            .unwrap();
-        
-        if let Err(e) = transport.send(message).await {
-            error!("Failed to publish clock: {}", e);
-        } else {
-            info!("Publishing clock timestamp: {}", clock_payload);
+async fn publish_message(transport: &Arc<dyn UTransport>, uri_str: &str, payload: &str, format: &str) -> Result<(), Box<dyn std::error::Error>> {
+    // Parse URI - support both full URI format and parts format
+    let uri = if uri_str.contains("://") {
+        UUri::from_str(uri_str)?
+    } else {
+        // Parse as authority/ue_id/ue_version/resource_id
+        let parts: Vec<&str> = uri_str.split('/').collect();
+        if parts.len() != 4 {
+            return Err(format!("Invalid URI format. Expected: authority/ue_id/ue_version/resource_id, got: {}", uri_str).into());
         }
-
-        // Publish current velocity
-        let velocity_payload = format!("{}", velocity);
-        let message = UMessageBuilder::publish(velocity_uri.clone())
-            .build_with_payload(velocity_payload.clone(), UPayloadFormat::UPAYLOAD_FORMAT_TEXT)
-            .unwrap();
         
-        if let Err(e) = transport.send(message).await {
-            error!("Failed to publish velocity: {}", e);
-        } else {
-            info!("Publishing velocity: {}", velocity_payload);
-        }
-
-        // Publish target speed
-        let target_payload = format!("{}", target);
-        let message = UMessageBuilder::publish(target_uri.clone())
-            .build_with_payload(target_payload.clone(), UPayloadFormat::UPAYLOAD_FORMAT_TEXT)
-            .unwrap();
+        let authority = parts[0];
+        let ue_id: u32 = parts[1].parse()?;
+        let ue_version: u8 = parts[2].parse()?;
         
-        if let Err(e) = transport.send(message).await {
-            error!("Failed to publish target speed: {}", e);
+        // Parse resource_id as hexadecimal if it starts with 0x, otherwise as decimal
+        let resource_id: u16 = if parts[3].starts_with("0x") || parts[3].starts_with("0X") {
+            u16::from_str_radix(&parts[3][2..], 16)?
         } else {
-            info!("Publishing target speed: {}", target_payload);
-        }
-
-        // Publish engage status
-        let engage_payload = format!("{}", engaged);
-        let message = UMessageBuilder::publish(engage_uri.clone())
-            .build_with_payload(engage_payload.clone(), UPayloadFormat::UPAYLOAD_FORMAT_TEXT)
-            .unwrap();
+            // Try parsing as hex first (for values like 8001, 8002)
+            u16::from_str_radix(parts[3], 16).unwrap_or_else(|_| {
+                // If hex parsing fails, try decimal
+                parts[3].parse().unwrap_or(0)
+            })
+        };
         
-        if let Err(e) = transport.send(message).await {
-            error!("Failed to publish engage status: {}", e);
-        } else {
-            info!("Publishing engage status: {}", engage_payload);
-        }
+        UUri::try_from_parts(authority, ue_id, ue_version, resource_id)?
+    };
 
-        println!("Published uProtocol messages: time={}, velocity={:.2}, target={:.2}, engaged={}", 
-                current_time, velocity, target, engaged);
-
-        // Uncomment to toggle engagement for testing
-        // engaged = if engaged == 1 { 0 } else { 1 };
-
-        sleep(Duration::from_secs(2)).await;
+    let payload_format = parse_payload_format(format);
+    
+    info!("Publishing to URI: {} with payload: {} (format: {})", String::from(&uri), payload, format);
+    
+    let message = UMessageBuilder::publish(uri)
+        .build_with_payload(payload.to_string(), payload_format)?;
+    
+    if let Err(e) = transport.send(message).await {
+        error!("Failed to publish message: {}", e);
+        return Err(e.into());
     }
+    
+    info!("Successfully published message");
+    Ok(())
+}
+
+#[tokio::main]
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Initialize logging
+    env_logger::init();
+    
+    let args = Args::parse();
+    
+    info!("*** Started uProtocol Publisher");
+
+    // Create transport
+    let transport = create_transport(&args.endpoint, &args.authority, args.entity_id, args.version_major).await?;
+    
+    match args.command {
+        Commands::Args { uri, payload, format } => {
+            if uri.is_empty() {
+                return Err("At least one URI must be provided".into());
+            }
+            
+            let messages = parse_arguments(uri, payload, format)?;
+            
+            info!("Publishing {} messages", messages.len());
+            
+            for msg in messages {
+                if let Err(e) = publish_message(&transport, &msg.uri, &msg.payload, &msg.format).await {
+                    error!("Failed to publish to {}: {}", msg.uri, e);
+                } else {
+                    println!("✓ Published to {}: {} ({})", msg.uri, msg.payload, msg.format);
+                }
+                
+                // Small delay between messages
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            }
+        }
+        
+        Commands::File { path } => {
+            let file_content = std::fs::read_to_string(&path)?;
+            let messages: MultipleMessages = serde_json::from_str(&file_content)?;
+            
+            info!("Publishing {} messages from file: {}", messages.messages.len(), path);
+            
+            for msg in messages.messages {
+                if let Err(e) = publish_message(&transport, &msg.uri, &msg.payload, &msg.format).await {
+                    error!("Failed to publish to {}: {}", msg.uri, e);
+                } else {
+                    println!("✓ Published to {}: {} ({})", msg.uri, msg.payload, msg.format);
+                }
+                
+                tokio::time::sleep(tokio::time::Duration::from_millis(100)).await;
+            }
+        }
+        
+        Commands::Interactive => {
+            info!("Interactive mode - Enter URI and payload pairs (Ctrl+C to exit)");
+            
+            loop {
+                println!("\nEnter URI (authority/ue_id/ue_version/resource_id):");
+                let mut uri_input = String::new();
+                std::io::stdin().read_line(&mut uri_input)?;
+                let uri = uri_input.trim();
+                
+                if uri.is_empty() {
+                    warn!("Empty URI, skipping...");
+                    continue;
+                }
+                
+                println!("Enter payload:");
+                let mut payload_input = String::new();
+                std::io::stdin().read_line(&mut payload_input)?;
+                let payload = payload_input.trim();
+                
+                println!("Enter format (text/json/protobuf) [default: text]:");
+                let mut format_input = String::new();
+                std::io::stdin().read_line(&mut format_input)?;
+                let format = format_input.trim();
+                let format = if format.is_empty() { "text" } else { format };
+                
+                if let Err(e) = publish_message(&transport, uri, payload, format).await {
+                    error!("Failed to publish: {}", e);
+                } else {
+                    println!("✓ Message published successfully!");
+                }
+            }
+        }
+    }
+    
+    info!("uProtocol Publisher finished");
+    Ok(())
 }
