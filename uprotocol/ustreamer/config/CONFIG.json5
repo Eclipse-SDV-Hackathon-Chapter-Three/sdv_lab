@@ -26,12 +26,20 @@
             // List of endpoints that use the zenoh transport
             endpoints: [
                 {
-                    authority: "EgoVehicle",
+                    authority: "EGOVehicle",
                     // Make sure that each endpoint has a unique identifier or the streamer will not start
                     endpoint: "egovehicle_endpoint",
                     // All endpoint identifiers listed here must also be defined in this config
                     forwarding: [
                         "aaos_endpoint"
+                    ]
+                },
+                {
+                    authority: "CruiseControl",
+                    // Make sure that each endpoint has a unique identifier or the streamer will not start
+                    endpoint: "cruisecontrol_endpoint",
+                    // All endpoint identifiers listed here must also be defined in this config
+                    forwarding: [
                     ]
                 },
             ]
@@ -45,6 +53,15 @@
                     endpoint: "aaos_endpoint",
                     forwarding: [
                         "cruisecontrol_endpoint",
+                        "egovehicle_endpoint",
+                    ]
+                },
+                {
+                    authority: "Threadx",
+                    endpoint: "threadx_endpoint",
+                    forwarding: [
+                        "cruisecontrol_endpoint",
+                        "egovehicle_endpoint",
                     ]
                 },
             ]

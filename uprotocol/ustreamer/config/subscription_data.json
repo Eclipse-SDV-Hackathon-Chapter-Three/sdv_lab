@@ -1,6 +1,8 @@
 {
-  "AAOS/0/2/8001": ["CruiseControl/0/2/1234"],
-  "AAOS/0/2/8002": ["CruiseControl/0/2/1234"],
-  "AAOS/0/2/8003": ["CruiseControl/0/2/1234"],
-  "EGOVehicle/0/2/8001": ["AAOS/0/2/1234"]
+  "//AAOS/0/2/8001": [
+    "//CruiseControl/5678/1/1234",
+    "//EGOVehicle/5678/2/1234"
+  ],
+  "//EGOVehicle/0/2/8001": ["//AAOS/0/1/1"],
+  "//Threadx/0/2/8001": ["//CruiseControl/5678/1/1234"]
 }

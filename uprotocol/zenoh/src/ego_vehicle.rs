@@ -18,26 +18,28 @@
 // ]
 // subscribes to [
 //     CruiseControl/0/2/8001
+//     AAOS/0/2/8001
+//     Threadx/0/2/8001
 // ]
 
 use async_trait::async_trait;
-use log::{debug, info, warn};
-use std::str::FromStr;
+use log::{debug, error, info, warn};
 use std::sync::Arc;
 use std::thread;
-use up_rust::{UListener, UMessage, UStatus, UTransport, UUri};
+use std::{str::FromStr, time::SystemTime};
+use up_rust::{UListener, UMessage, UMessageBuilder, UPayloadFormat, UStatus, UTransport, UUri};
 use up_transport_zenoh::UPTransportZenoh;
 use zenoh::config::{Config, EndPoint};
 
-// publish topics
-const PUB_TOPIC_1: &str = "EGOVehicle/0/2/8001";
-const PUB_TOPIC_2: &str = "EGOVehicle/0/2/8002";
+// publish
+const EGO_AUTH: &str = "EGOVehicle";
+// subscribe
+const CRUISE_AUTH: &str = "CruiseControl";
+const AAOS_AUTH: &str = "AAOS";
+const X_AUTH: &str = "Threadx";
 
-// subscribe topics
-const SUB_TOPIC_1: &str = "CruiseControl/0/2/8001";
-
-// id of the entity itself
-const ENTITY_ID: &str = "EGOVehicle/0/2/0";
+const UEID: u32 = 0;
+const VERSION: u8 = 2;
 
 struct PublishReceiver;
 
@@ -58,8 +60,22 @@ impl UListener for PublishReceiver {
 async fn main() -> Result<(), UStatus> {
     env_logger::init();
 
-    info!("Started zenoh_subscriber");
+    info!("Started ego vehicle");
 
+    // --- Lists of pubish and subscribe topics ---
+    let pub_topics = [
+        UUri::try_from_parts(EGO_AUTH, UEID, VERSION, 0x8001).expect("Invalid UURI"),
+        UUri::try_from_parts(EGO_AUTH, UEID, VERSION, 0x8002).expect("Invalid UURI"),
+    ];
+
+    let sub_topics = [
+        UUri::try_from_parts(CRUISE_AUTH, UEID, VERSION, 0x8001).expect("Invalid UURI"),
+        UUri::try_from_parts(AAOS_AUTH, UEID, VERSION, 0x8001).expect("Invalid UURI"),
+        UUri::try_from_parts(X_AUTH, UEID, VERSION, 0x8001).expect("Invalid UURI"),
+    ];
+    // --- End of Lists of pubish and subscribe topics ---
+
+    // --- Zenoh Transport Specific Stuff ---
     let mut zenoh_config = Config::default();
     // Add the IPv4 endpoint to the Zenoh configuration
     zenoh_config
@@ -70,29 +86,69 @@ async fn main() -> Result<(), UStatus> {
         ])
         .expect("Unable to set Zenoh Config");
 
-    let client_uri: String = (&subscriber_uuri()).into();
     let client: Arc<dyn UTransport> = Arc::new(
-        UPTransportZenoh::new(zenoh_config, subscriber_uri)
-            .await
-            .unwrap(),
+        UPTransportZenoh::new(
+            zenoh_config,
+            UUri::try_from_parts(EGO_AUTH, UEID, VERSION, 0).expect("Invalid UURI"),
+        )
+        .await
+        .unwrap(),
     );
+    // --- End of Zenoh Transport Specific Stuff ---
 
-    // TODO subscribe to the "subscribe topics"
+    // --- Creation of Publishing Tasks ---
+    for pub_topic in pub_topics {
+        let client = client.clone();
+        tokio::spawn(async move {
+            loop {
+                let current_time = SystemTime::now()
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs();
+                let payload_text = format!(
+                    "Hello from '{}' - Resource: '0x{:X}' using {} - UTC: {current_time}",
+                    EGO_AUTH,
+                    UEID,
+                    std::any::type_name_of_val(&*client)
+                        .split("::")
+                        .last()
+                        .unwrap_or("Unknown")
+                );
 
-    // TODO publish helloworld messages to every topic in the list of "publish topics" up top
+                let message = UMessageBuilder::publish(pub_topic.clone())
+                    .with_ttl(1000)
+                    .build_with_payload(payload_text.clone(), UPayloadFormat::UPAYLOAD_FORMAT_TEXT)
+                    .expect("Failed to build message");
 
-    let source_filter = UUri::try_from_parts(
-        PUB_TOPIC_AUTHORITY,
-        PUB_TOPIC_UE_ID,
-        PUB_TOPIC_UE_VERSION_MAJOR,
-        PUB_TOPIC_RESOURCE_ID,
-    )
-    .unwrap();
+                if let Err(e) = client.send(message).await {
+                    error!(
+                        "Failed to publish message payload: [{payload_text}] to source: [{}] : '{e}'",
+                        pub_topic
+                    );
+                } else {
+                    info!(
+                        "Successfully published message payload: [{payload_text}] to source: [{}]",
+                        pub_topic.to_uri(true)
+                    );
+                }
 
-    let publish_receiver: Arc<dyn UListener> = Arc::new(PublishReceiver);
-    client
-        .register_listener(&source_filter, None, publish_receiver.clone())
-        .await?;
+                tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+            }
+        });
+    }
+    // --- End of Creation of Publishing Tasks ---
+
+    // --- Registration of subscription Receivers ---
+    for sub_topic in sub_topics {
+        let client = client.clone();
+        let publish_receiver: Arc<dyn UListener> = Arc::new(PublishReceiver);
+        client
+            .register_listener(&sub_topic, None, publish_receiver.clone())
+            .await
+            .unwrap();
+        info!("Subscribed to {}", sub_topic.to_string());
+    }
+    // --- End of Registration of subscription Receivers ---
 
     thread::park();
     Ok(())
