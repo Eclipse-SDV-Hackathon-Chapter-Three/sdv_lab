@@ -28,12 +28,12 @@ zenoh = { version = "1.2.1", features = [
 
 [[bin]]
 name = "pid_controller"
-path = "src/main.rs"
+path = "src/pid/main.rs"
 
 [[bin]]
 name = "sim_pub"
-path = "src/simulator_pub.rs"
+path = "src/test/simulator_pub.rs"
 
 [[bin]]
 name = "up_pub"
-path = "src/uprotocol_pub.rs"
+path = "src/test/uprotocol_pub.rs"
