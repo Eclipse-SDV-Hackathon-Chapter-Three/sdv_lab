@@ -32,7 +32,7 @@ struct VelocityStatus {
 
 #[derive(Debug, Serialize, Deserialize)]
 struct ClockStatus {
-    time: u64,
+    time: f64,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -59,8 +59,8 @@ pub struct UProtocolHandler {
     // State variables
     current_velocity: Arc<Mutex<f64>>,
     desired_velocity: Arc<Mutex<f64>>,
-    current_time: Arc<Mutex<u64>>,
-    previous_time: Arc<Mutex<u64>>,
+    current_time: Arc<Mutex<f64>>,
+    previous_time: Arc<Mutex<f64>>,
     is_engaged: Arc<Mutex<u8>>,
     pid_active: Arc<Mutex<bool>>,
     
@@ -96,8 +96,8 @@ impl UProtocolHandler {
             actuation_uri,
             current_velocity: Arc::new(Mutex::new(0.0)),
             desired_velocity: Arc::new(Mutex::new(0.0)),
-            current_time: Arc::new(Mutex::new(0)),
-            previous_time: Arc::new(Mutex::new(0)),
+            current_time: Arc::new(Mutex::new(0.0)),
+            previous_time: Arc::new(Mutex::new(0.0)),
             is_engaged: Arc::new(Mutex::new(0)),
             pid_active: Arc::new(Mutex::new(false)),
             results: Arc::new(Mutex::new(results)),
@@ -191,8 +191,8 @@ impl UProtocolHandler {
     async fn publish_acc(
         desired_velocity: &Arc<Mutex<f64>>,
         current_velocity: &Arc<Mutex<f64>>,
-        current_time: &Arc<Mutex<u64>>,
-        previous_time: &Arc<Mutex<u64>>,
+        current_time: &Arc<Mutex<f64>>,
+        previous_time: &Arc<Mutex<f64>>,
         pid_active: &Arc<Mutex<bool>>,
         controller: &Arc<Mutex<PIDController>>,
         transport: &Arc<UPTransportZenoh>,
@@ -219,7 +219,7 @@ impl UProtocolHandler {
         // Compute acceleration using PID controller
         let acceleration = {
             let mut pid = controller.lock().unwrap();
-            match pid.compute(desired_vel, current_vel, curr_time as f64) {
+            match pid.compute(desired_vel, current_vel, curr_time) {
                 Ok(acc) => acc,
                 Err(e) => {
                     error!("PID computation failed: {}", e);
@@ -245,19 +245,19 @@ impl UProtocolHandler {
             let mut results_guard = results.lock().unwrap();
             results_guard.get_mut("desired_velocity").unwrap().push(desired_vel);
             results_guard.get_mut("current_velocity").unwrap().push(current_vel);
-            results_guard.get_mut("current_time").unwrap().push(curr_time as f64);
+            results_guard.get_mut("current_time").unwrap().push(curr_time);
             results_guard.get_mut("acceleration").unwrap().push(acceleration);
         }
 
         // Calculate and log delta time
         let (_prev_time, delta_time) = {
             let mut prev = previous_time.lock().unwrap();
-            let delta = if *prev > 0 { curr_time - *prev } else { 0 };
+            let delta = if *prev > 0.0 { curr_time - *prev } else { 0.0 };
             *prev = curr_time;
             (*prev, delta)
         };
         
-        if delta_time > 0 {
+        if delta_time > 0.0 {
             info!("Delta time: {} seconds", delta_time);
         }
     }
@@ -389,7 +389,7 @@ impl UProtocolHandler {
 
     // Get current state for debugging
     #[allow(dead_code)]    
-    pub fn get_state(&self) -> (f64, f64, u64, bool) {
+    pub fn get_state(&self) -> (f64, f64, f64, bool) {
         let current_vel = *self.current_velocity.lock().unwrap();
         let desired_vel = *self.desired_velocity.lock().unwrap();
         let current_time = *self.current_time.lock().unwrap();
@@ -401,11 +401,11 @@ impl UProtocolHandler {
 
 // Listener implementations
 struct ClockListener {
-    current_time: Arc<Mutex<u64>>,
+    current_time: Arc<Mutex<f64>>,
 }
 
 impl ClockListener {
-    fn new(current_time: Arc<Mutex<u64>>) -> Self {
+    fn new(current_time: Arc<Mutex<f64>>) -> Self {
         Self { current_time }
     }
 }
@@ -415,32 +415,31 @@ impl UListener for ClockListener {
     async fn on_receive(&self, message: UMessage) {
         if let Some(payload) = message.payload {
             let bytes = &payload[..];
+            
             // Try to parse as text first (new format)
-            if let Ok(payload_str) = std::str::from_utf8(&bytes) {
-                match payload_str.trim().parse::<u64>() {
-                    Ok(time) => {
-                        {
-                            let mut current_time = self.current_time.lock().unwrap();
-                            *current_time = time;
-                        }
-                        info!("Received current clock '{}'", time);
-                        return;
-                    }
+            let time_value = if let Ok(payload_str) = std::str::from_utf8(&bytes) {
+                match payload_str.trim().parse::<f64>() {
+                    Ok(time) => time,
                     Err(_) => {
                         // Fall back to JSON format for backward compatibility
                         if let Ok(clock_status) = serde_json::from_slice::<ClockStatus>(&bytes) {
-                            let time = clock_status.time;
-                            {
-                                let mut current_time = self.current_time.lock().unwrap();
-                                *current_time = time;
-                            }
-                            info!("Received current clock '{}'", time);
+                            clock_status.time
+                        } else {
+                            error!("[ERROR] Timestamp processing failed as JSON");
                             return;
                         }
                     }
                 }
+            } else {
+                error!("[ERROR] Timestamp processing failed as UTF-8");
+                return;
+            };
+            
+            {
+                let mut clock = self.current_time.lock().unwrap();
+                *clock = time_value;
             }
-            error!("[ERROR] Timestamp processing failed");
+            info!("Received current clock '{:.4}' seconds", time_value);
         }
     }
 }
@@ -448,8 +447,8 @@ impl UListener for ClockListener {
 struct VelocityListener {
     current_velocity: Arc<Mutex<f64>>,
     desired_velocity: Arc<Mutex<f64>>,
-    current_time: Arc<Mutex<u64>>,
-    previous_time: Arc<Mutex<u64>>,
+    current_time: Arc<Mutex<f64>>,
+    previous_time: Arc<Mutex<f64>>,
     pid_active: Arc<Mutex<bool>>,
     controller: Arc<Mutex<PIDController>>,
     results: Arc<Mutex<HashMap<String, Vec<f64>>>>,
@@ -461,8 +460,8 @@ impl VelocityListener {
     fn new(
         current_velocity: Arc<Mutex<f64>>,
         desired_velocity: Arc<Mutex<f64>>,
-        current_time: Arc<Mutex<u64>>,
-        previous_time: Arc<Mutex<u64>>,
+        current_time: Arc<Mutex<f64>>,
+        previous_time: Arc<Mutex<f64>>,
         pid_active: Arc<Mutex<bool>>,
         controller: Arc<Mutex<PIDController>>,
         results: Arc<Mutex<HashMap<String, Vec<f64>>>>,

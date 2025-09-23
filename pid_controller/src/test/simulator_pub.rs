@@ -70,13 +70,13 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let target = rand::rng().random_range(10.0..20.0);
 
         // Getting system time as a timestamp in seconds
-        let current_time = SystemTime::now()
+        let current_time: f64 = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .unwrap()
-            .as_secs();
+            .as_secs_f64();
 
         // Publish current timestamp
-        let clock_payload = format!("{}", current_time);
+        let clock_payload = format!("{}", current_time + 0.3517);
         let message = UMessageBuilder::publish(clock_uri.clone())
             .build_with_payload(clock_payload.clone(), UPayloadFormat::UPAYLOAD_FORMAT_TEXT)
             .unwrap();
@@ -123,7 +123,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             info!("Publishing engage status: {}", engage_payload);
         }
 
-        println!("Published uProtocol messages: time={}, velocity={:.2}, target={:.2}, engaged={}", 
+        println!("Published uProtocol messages: time={:.4}, velocity={:.2}, target={:.2}, engaged={}", 
                 current_time, velocity, target, engaged);
 
         // Uncomment to toggle engagement for testing
