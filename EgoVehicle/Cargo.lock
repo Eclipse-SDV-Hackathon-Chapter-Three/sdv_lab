@@ -448,17 +448,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "carla-data-serde"
-version = "0.1.0"
-source = "git+ssh://git@github.com/Eclipse-SDV-Hackathon-Chapter-Three/carla-data-serde.git?branch=main#5f76545a527d8934cc07f1301cfa1593ea711769"
-dependencies = [
- "carla",
- "nalgebra",
- "ndarray",
- "serde",
-]
-
-[[package]]
 name = "carla-src"
 version = "0.11.0"
 source = "git+https://github.com/Eclipse-SDV-Hackathon-Chapter-Three/carla-rust.git?branch=action-buffer-fix#3dfeeeda53f8f33ce3b222934768e8bdcd328beb"
@@ -1006,7 +995,6 @@ name = "ego-vehicle"
 version = "0.1.0"
 dependencies = [
  "carla",
- "carla-data-serde",
  "clap",
  "ctrlc",
  "log",
