@@ -18,28 +18,32 @@ use carla::client::{ActorBase, Client};
 
 use clap::Parser;
 use log;
-
+use up_transport_zenoh::zenoh_config;
 use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
-
+use async_trait::async_trait;
+use std::{str::FromStr};
 use zenoh::{bytes::Encoding, key_expr::KeyExpr, Config};
+use up_rust::{LocalUriProvider, StaticUriProvider, UMessageBuilder, UPayloadFormat, UTransport,UListener, UMessage, UUri};
+use up_transport_zenoh::UPTransportZenoh;
 
 // General constants
 const CLIENT_TIME_MS: u64 = 5_000;
 const POLLING_EGO_MS: u64 = 1_000;
 const WAITING_PUB_MS: u64 = 1;
-
 // Vehicle control constants
 const MIN_THROTTLE: f32 =  0.0;
 const MIN_STEERING: f32 = -1.0;
 const MIN_BRAKING:  f32 =  0.0;
-
 const MID_STEERING: f32 = 0.0;
-
 const MAX_THROTTLE: f32 = 1.0;
 const MAX_STEERING: f32 = 1.0;
 const MAX_BRAKING:  f32 = 1.0;
+
+// uProtocol resource IDs
+const RESOURCE_VELOCITY_STATUS: u16 = 0x8001;
+const RESOURCE_CLOCK_STATUS: u16 = 0x8002;
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -56,8 +60,69 @@ struct Args {
     router: Option<String>,
 }
 
+// Helper function to create a Zenoh configuration
+pub(crate) fn get_zenoh_config() -> zenoh_config::Config {
+    let args = Args::parse();
+
+    let zenoh_string = if let Some(router) = &args.router {
+        format!("{{ mode: 'peer', connect: {{ endpoints: [ 'tcp/{}:7447' ] }} }}", router)
+    } else {
+        "{ mode: 'peer' }".to_string()
+    };
+
+    let zenoh_config = Config::from_json5(&zenoh_string).expect("Failed to load Zenoh config");
+
+    zenoh_config
+}
+
+// Listener for actuation command - implements the UListener trait for uProtocol
+struct ActuationListener {
+    data: Arc<Mutex<Option<String>>>,  // Shared data structure to store the latest actuation command
+}
+
+#[async_trait]
+impl UListener for ActuationListener {
+    async fn on_receive(&self, msg: UMessage) {
+        if let Some(payload) = msg.payload {
+            // Convert the binary payload to a string
+            let value = String::from_utf8(payload.to_vec()).unwrap_or_else(|_| "Invalid UTF-8".to_string());
+            log::trace!("[from_uprotocol] actuation_cmd : {}", value);
+            
+            // Update the shared data structure with the new value
+            // This is where the lock is acquired and the data is updated
+            let mut data = self.data.lock().unwrap();
+            *data = Some(value);
+            // Lock is released when data goes out of scope
+        }
+    }
+}
+
+// Listener for engage status - implements the UListener trait for uProtocol
+struct EngageListener {
+    data: Arc<Mutex<Option<String>>>,  // Shared data structure to store the latest engage status
+}
+
+#[async_trait]
+impl UListener for EngageListener {
+    async fn on_receive(&self, msg: UMessage) {
+        if let Some(payload) = msg.payload {
+            // Convert the binary payload to a string
+            let value = String::from_utf8(payload.to_vec()).unwrap_or_else(|_| "Invalid UTF-8".to_string());
+            log::trace!("[from_uprotocol] engage : {}", value);
+            
+            // Update the shared data structure with the new value
+            // This is where the lock is acquired and the data is updated
+            let mut data = self.data.lock().unwrap();
+            *data = Some(value);
+            // Lock is released when data goes out of scope
+        }
+    }
+}
+
+
 #[tokio::main]
-async fn main() {
+async fn main() -> Result<(), Box<dyn std::error::Error>>{
+
     // Parse command line arguments
     let args = Args::parse();
 
@@ -118,52 +183,72 @@ async fn main() {
         tokio::time::sleep(Duration::from_millis(POLLING_EGO_MS)).await;
     }
 
-    // Set up Zenoh session, subscribers and publishers
-    log::info!("Opening the Zenoh session...");
+    // Initialize uProtocol logging
+    UPTransportZenoh::try_init_log_from_env();
 
-    let zenoh_string = if let Some(router) = &args.router {
-        format!("{{ mode: 'peer', connect: {{ endpoints: [ 'tcp/{}:7447' ] }} }}", router)
-    } else {
-        "{ mode: 'peer' }".to_string()
-    };
+    // Create a uProtocol URI provider for this vehicle
+    // This defines the identity of this node in the uProtocol network
+    let uri_provider = StaticUriProvider::new("EGOVehicle", 0, 2);
+    
+    // Create the uProtocol transport using Zenoh as the underlying transport
+    let transport = UPTransportZenoh::builder(uri_provider.get_authority())
+        .expect("invalid authority name")
+        .with_config(get_zenoh_config())
+        .build()
+        .await?;
 
-    let zenoh_config = Config::from_json5(&zenoh_string).expect("Failed to load Zenoh config");
+    // Create shared data structures for uProtocol subscribers
+    // These will store the latest values received from uProtocol messages
+    let actuation_cmd: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
+    let engage: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(Some(0.to_string())));
+    
+    // Register the actuation command listener with uProtocol
+    // This listener will be called when messages matching the filter are received
+    let actuation_filter = UUri::from_str("//CruiseControl/0/2/8001")?;
+    log::info!("Registering actuation command listener [filter: {}]", actuation_filter.to_uri(false));
+    transport.register_listener(
+        &actuation_filter,
+        None,
+        Arc::new(ActuationListener { data: actuation_cmd.clone() }),
+    ).await?;
+    
+    // Register the engage listener with uProtocol
+    // This listener will be called when messages matching the filter are received
+    let engage_filter = UUri::from_str("//AAOS/0/2/8002")?;
+    log::info!("Registering engage listener [filter: {}]", engage_filter.to_uri(false));
+    transport.register_listener(
+        &engage_filter,
+        None,
+        Arc::new(EngageListener { data: engage.clone() }),
+    ).await?;
+    
+    // Create topics for publishing uProtocol messages
+    let clock_topic = uri_provider.get_resource_uri(RESOURCE_CLOCK_STATUS);
+    let velocity_topic = uri_provider.get_resource_uri(RESOURCE_VELOCITY_STATUS);   
+    
+    // Set up Zenoh session for traditional Zenoh subscribers
+    let zenoh_session = zenoh::open(get_zenoh_config()).await.unwrap();
 
-    log::info!("Zenoh configuration: {:?}", zenoh_config);
-
-    let zenoh_session = zenoh::open(zenoh_config).await.unwrap();
-
-    // Subscribe topics
+    // Define Zenoh topics to subscribe to
     let topic_throttle   = KeyExpr::new("vehicle/status/throttle_status").unwrap();
     let topic_steering   = KeyExpr::new("vehicle/status/steering_status").unwrap();
     let topic_braking    = KeyExpr::new("vehicle/status/braking_status").unwrap();
-    let topic_actuation  = KeyExpr::new("control/command/actuation_cmd").unwrap();
-    let topic_engage     = KeyExpr::new("adas/cruise_control/engage").unwrap();
 
+    // Create Zenoh subscribers
     log::info!("Declaring Subscriber on '{}'...", &topic_throttle);
-
     let mut _subscriber_throttle = zenoh_session.declare_subscriber(&topic_throttle).await.unwrap();
 
     log::info!("Declaring Subscriber on '{}'...", &topic_steering);
-
     let mut _subscriber_steering = zenoh_session.declare_subscriber(&topic_steering).await.unwrap();
 
     log::info!("Declaring Subscriber on '{}'...", &topic_braking);
-
     let mut _subscriber_braking = zenoh_session.declare_subscriber(&topic_braking).await.unwrap();
 
-    log::info!("Declaring Subscriber on '{}'...", &topic_actuation);
-
-    let mut _subscriber_actuation = zenoh_session.declare_subscriber(&topic_actuation).await.unwrap();
-
-    log::info!("Declaring Subscriber on '{}'...", &topic_engage);
-
-    let mut _subscriber_engage = zenoh_session.declare_subscriber(&topic_engage).await.unwrap();
-
-    // Attach a callback to the subscriber to handle incoming messages
+    // Create shared data structures for Zenoh subscribers
     let throttle_sts: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
     let throttle_sts_clone = throttle_sts.clone();
 
+    // Spawn a task to handle throttle status messages from Zenoh
     tokio::spawn(async move {
         while let Ok(sample) = _subscriber_throttle.recv_async().await {
             // Receive the payload and convert it to a string
@@ -175,15 +260,15 @@ async fn main() {
 
             log::trace!("[from_zenoh] throttle_status : {}", payload);
 
-            // Store the payload
+            // Store the payload in the shared data structure
             let mut data = throttle_sts_clone.lock().unwrap();
             *data = Some(payload);
         }
     });
 
+    // Spawn a task to handle steering status messages from Zenoh
     let steering_sts: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
     let steering_sts_clone = steering_sts.clone();
-
     tokio::spawn(async move {
         while let Ok(sample) = _subscriber_steering.recv_async().await {
             // Receive the payload and convert it to a string
@@ -195,15 +280,15 @@ async fn main() {
 
             log::trace!("[from_zenoh] steering_status : {}", payload);
 
-            // Store the payload
+            // Store the payload in the shared data structure
             let mut data = steering_sts_clone.lock().unwrap();
             *data = Some(payload);
         }
     });
 
+    // Spawn a task to handle braking status messages from Zenoh
     let braking_sts: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
     let braking_sts_clone = braking_sts.clone();
-
     tokio::spawn(async move {
         while let Ok(sample) = _subscriber_braking.recv_async().await {
             // Receive the payload and convert it to a string
@@ -215,97 +300,18 @@ async fn main() {
 
             log::trace!("[from_zenoh] braking_sts : {}", payload);
 
-            // Store the payload
+            // Store the payload in the shared data structure
             let mut data = braking_sts_clone.lock().unwrap();
             *data = Some(payload);
         }
     });
 
-    let actuation_cmd: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
-    let actuation_cmd_clone = actuation_cmd.clone();
-
-    tokio::spawn(async move {
-        while let Ok(sample) = _subscriber_actuation.recv_async().await {
-            // Receive the payload and convert it to a string
-            let payload = sample
-                .payload()
-                .try_to_string()
-                .map(|s| s.to_string())
-                .unwrap_or_else(|e| e.to_string());
-
-            log::trace!("[from_zenoh] actuation_cmd : {}", payload);
-
-            // Store the payload
-            let mut data = actuation_cmd_clone.lock().unwrap();
-            *data = Some(payload);
-        }
-    });
-
-    let engage: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(Some(0.to_string())));
-    let engage_clone = engage.clone();
-
-    tokio::spawn(async move {
-        while let Ok(sample) = _subscriber_engage.recv_async().await {
-            // Receive the payload and convert it to a string
-            let payload = sample
-                .payload()
-                .try_to_string()
-                .map(|s| s.to_string())
-                .unwrap_or_else(|e| e.to_string());
-
-            log::trace!("[from_zenoh] engage : {}", payload);
-
-            // Store the payload
-            let mut data = engage_clone.lock().unwrap();
-            *data = Some(payload);
-        }
-    });
-
-    // Publish topics
-    let topic_clock    = KeyExpr::new("vehicle/status/clock_status").unwrap();
-    let topic_velocity = KeyExpr::new("vehicle/status/velocity_status").unwrap();
-
-    log::info!("Declaring a Zenoh Publisher on '{topic_clock}'...");
-    log::info!("Declaring a Zenoh Publisher on '{topic_velocity}'...");
-
-    let publisher_clock = zenoh_session.declare_publisher(&topic_clock).await.unwrap();
-    let publisher_velocity = zenoh_session.declare_publisher(&topic_velocity).await.unwrap();
-
-    let topic_clock_str = topic_clock.to_string();
-    let topic_velocity_str = topic_velocity.to_string();
-
-    publisher_clock
-        .matching_listener()
-        .callback(move |matching_status| {
-            if matching_status.matching() {
-                log::info!("Publisher has at least one subscriber for '{}'.", topic_clock_str);
-            } else {
-                log::info!("Publisher has NO MORE subscribers for '{}'.", topic_clock_str);
-            }
-        })
-        .background()
-        .await
-        .unwrap();
-
-    publisher_velocity
-        .matching_listener()
-        .callback(move |matching_status| {
-            if matching_status.matching() {
-                log::info!("Publisher has at least one subscriber for '{}'.", topic_velocity_str);
-            } else {
-                log::info!("Publisher has NO MORE subscribers for '{}'.", topic_velocity_str);
-            }
-        })
-        .background()
-        .await
-        .unwrap();
-
-    // Main loop
     let mut last_time: f64 = 0.0;
     let attachment: Option<String> = None;
 
+    // Main loop
     while running.load(Ordering::SeqCst) {
-        // Syncronize Carla's world and takes a snapshot of the current frame
+        // Synchronize Carla's world and take a snapshot of the current frame
         let snapshot = carla_world.wait_for_tick();
         let timestamp = snapshot.timestamp();
         let delta_time = timestamp.platform_timestamp - last_time;
@@ -318,92 +324,106 @@ async fn main() {
 
         last_time = timestamp.platform_timestamp;
 
-        let mut payload = format!("{}", timestamp.elapsed_seconds);
-
-        log::debug!("[to_zenoh] clock_status : {}", payload);
-
-        publisher_clock
-            .put(payload)
-            .encoding(Encoding::TEXT_PLAIN) // Optionally set the encoding metadata
-            .attachment(attachment.clone()) // Optionally add an attachment
-            .await
-            .unwrap();
+        // Publish clock status via uProtocol
+        let clock_payload = format!("{}", timestamp.elapsed_seconds);
+        log::debug!("[to_uprotocol] clock_status : {}", clock_payload);
+        
+        let clock_message = UMessageBuilder::publish(clock_topic.clone())
+            .build_with_payload(clock_payload.clone(), UPayloadFormat::UPAYLOAD_FORMAT_TEXT)?;
+        transport.send(clock_message).await?;
 
         tokio::time::sleep(Duration::from_millis(WAITING_PUB_MS)).await;
 
         // Control the Ego Vehicle
         if let Some(actor) = carla_world.actor(ego_vehicle_id.unwrap()) {
             if let Ok(ego_vehicle) = actor.into_kinds().try_into_vehicle() {
+                // Calculate and publish velocity
                 let velocity = 3.6 * ego_vehicle.velocity().norm();
+                let velocity_payload = format!("{}", velocity);
 
-                payload = format!("{}", velocity);
+                // Publish velocity via uProtocol
+                log::debug!("[to_uprotocol] velocity_status : {}", velocity_payload);
+                let velocity_message = UMessageBuilder::publish(velocity_topic.clone())
+                    .build_with_payload(velocity_payload.clone(), UPayloadFormat::UPAYLOAD_FORMAT_TEXT)?;
+                transport.send(velocity_message).await?;
 
-                log::debug!("[to_zenoh] velocity_status : {}", payload);
-
-                publisher_velocity
-                    .put(payload)
-                    .encoding(Encoding::TEXT_PLAIN) // Optionally set the encoding metadata
-                    .attachment(attachment.clone()) // Optionally add an attachment
-                    .await
-                    .unwrap();
-
+                // Initialize control values
                 let mut throttle: f32 = MIN_THROTTLE;
                 let mut steer: f32 = MID_STEERING;
                 let mut brake: f32 = MIN_BRAKING;
 
-                let data_steering = steering_sts.lock().unwrap();
-                if let Some(ref payload) = *data_steering {
-                    if let Ok(val) = payload.parse::<f32>() {
-                        steer = val.clamp(MIN_STEERING, MAX_STEERING);
+                // Get steering value (Zenoh)
+                {
+                    let data_steering = steering_sts.lock().unwrap();
+                    if let Some(ref payload) = *data_steering {
+                        if let Ok(val) = payload.parse::<f32>() {
+                            steer = val.clamp(MIN_STEERING, MAX_STEERING);
+                        }
                     }
                 }
 
                 log::debug!("[from_manual] steering_sts: {steer}");
 
-                let data_engage = engage.lock().unwrap();
-                if let Some(ref payload) = *data_engage {
-                    if payload.to_lowercase() == "0" {
+                // Check engage status (prioritize uProtocol)
+                let engage_mode = {
+                    let data_engage = engage.lock().unwrap();
+                    if let Some(ref payload) = *data_engage {
+                        payload.to_lowercase() != "0"  // true for automatic mode, false for manual
+                    } else {
+                        false  // default to manual mode
+                    }
+                };
+
+                if !engage_mode {
+                    // Manual mode - use throttle and brake from Zenoh
+                    {
                         let data_throttle_sts = throttle_sts.lock().unwrap();
                         if let Some(ref payload) = *data_throttle_sts {
                             if let Ok(val) = payload.parse::<f32>() {
-                                throttle = val;
+                                throttle = val
                             }
                         }
+                    }
 
+                    {
                         let data_braking_sts = braking_sts.lock().unwrap();
                         if let Some(ref payload) = *data_braking_sts {
                             if let Ok(val) = payload.parse::<f32>() {
-                                brake = val;
+                                brake = val
                             }
                         }
+                    }
 
-                        log::debug!("[from_manual] throttle_sts: {throttle}, braking_sts: {brake}");
-                    } else {
-                        let mut pid_output: f32 = 0.0;
-
+                    log::debug!("[from_manual] throttle_sts: {throttle}, braking_sts: {brake}");
+                } else {
+                    // Automatic mode - use PID output from actuation command
+                    // Prioritize uProtocol actuation command
+                    let mut pid_output: f32 = 0.0;
+                    
+                    { // scope blocking to release lock after checking the value
                         let data_actuation_cmd = actuation_cmd.lock().unwrap();
                         if let Some(ref payload) = *data_actuation_cmd {
                             if let Ok(val) = payload.parse::<f32>() {
                                 pid_output = val;
                             }
                         }
+                    }
 
-                        log::debug!("[from_pid] actuation_cmd: {pid_output}");
+                    log::debug!("[from_pid] actuation_cmd: {pid_output}");
 
-                        if pid_output >= 0.0 {
-                            throttle = pid_output.clamp(MIN_THROTTLE, MAX_THROTTLE);
-                        } else {
-                            brake = pid_output.abs().clamp(MIN_BRAKING, MAX_BRAKING);
-                        }
+                    if pid_output >= 0.0 {
+                        throttle = pid_output.clamp(MIN_THROTTLE, MAX_THROTTLE);
+                    } else {
+                        brake = pid_output.abs().clamp(MIN_BRAKING, MAX_BRAKING);
                     }
                 }
 
+                // Apply control to the vehicle
                 let mut control = ego_vehicle.control();
 
                 control.throttle = throttle;
                 control.steer = steer;
                 control.brake = brake;
-
 
                 log::debug!("[to_carla] throttle={}, steer={}, brake={}",
                     control.throttle,
@@ -421,4 +441,8 @@ async fn main() {
     }
 
     log::info!("Exiting the main loop. Bye!");
+
+    // Return success when the program exits
+    Ok(())
 }
+
