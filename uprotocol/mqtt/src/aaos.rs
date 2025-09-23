@@ -45,10 +45,11 @@ impl UListener for PublishReceiver {
     async fn on_receive(&self, msg: UMessage) {
         debug!("PublishReceiver: Received a message: {msg:?}");
 
-        if let Some(payload) = msg.payload {
-            info!("Message has payload: {payload:?}");
+        if let Some(payload) = &msg.payload {
+            let source = &msg.source().unwrap().to_uri(false);
+            info!("Message has payload: {payload:?} and was published on {source}");
         } else {
-            warn!("Message has no payload.")
+            warn!("Message has no payload.");
         }
     }
 }
