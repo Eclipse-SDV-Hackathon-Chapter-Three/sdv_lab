@@ -39,7 +39,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let pid = PIDController::new(kp, ki, kd);
 
     // Create entity URI for the PID controller
-    let entity_uri = UUri::try_from_parts("PIDController", 0, 2, 0)?;
+    let entity_uri = UUri::try_from_parts("CruiseControl", 0, 2, 0)?;
     let entity_uri_string: String = (&entity_uri).into();
 
     // Initialize uProtocol transport with Zenoh
