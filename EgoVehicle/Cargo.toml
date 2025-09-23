@@ -17,10 +17,11 @@
 [package]
 name = "ego-vehicle"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
-carla = { version = "0.11.1" }
+async-trait = "0.1.89"
+carla = { path = "../carla-setup/localBuild/carla-rust/carla" }
 carla-data-serde = { git = "ssh://git@github.com/Eclipse-SDV-Hackathon-Chapter-Three/carla-data-serde.git", branch = "main" }
 clap = { version = "4.5.4", features = ["derive"] }
 ctrlc = "3.4"
@@ -31,14 +32,14 @@ pretty_env_logger = "0.4"
 serde = { version = "1.0" }
 serde_json = { version = "1" }
 tokio = { version = "1", features = ["full"] }
-up-rust = { version = "0.7.0" }
-up-transport-zenoh = { version = "0.8" }
+up-rust = "0.7.0"
+up-transport-zenoh = "0.8.0"
 zenoh = { version = "1.0.0-rc.2" }
 
-[patch.crates-io]
+# [patch.crates-io]
 # point the carla crate at your fork/branch
-carla = { git = "https://github.com/Eclipse-SDV-Hackathon-Chapter-Three/carla-rust.git", branch = "action-buffer-fix", package = "carla" }
+# carla = { git = "https://github.com/Eclipse-SDV-Hackathon-Chapter-Three/carla-rust.git", branch = "action-buffer-fix", package = "carla" }
 
 # optional but nice: also point carla-sys at the same repo (same branch)
 # (the repo contains both crates in a workspace)
-carla-sys = { git = "https://github.com/Eclipse-SDV-Hackathon-Chapter-Three/carla-rust.git", branch = "action-buffer-fix", package = "carla-sys" }
+# carla-sys = { git = "https://github.com/Eclipse-SDV-Hackathon-Chapter-Three/carla-rust.git", branch = "action-buffer-fix", package = "carla-sys" }
