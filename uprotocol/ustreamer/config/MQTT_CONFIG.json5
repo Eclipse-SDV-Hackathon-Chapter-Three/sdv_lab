@@ -1,8 +1,0 @@
-{
-  hostname: "5.196.78.28",
-  port: 1883,
-  max_buffered_messages: 100,
-  max_subscriptions: 100,
-  session_expiry_interval: 3600,
-  username: "user"
-}
