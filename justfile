@@ -4,11 +4,11 @@
 set ignore-comments := true
 
 # Optional imports
-import? "./carla-setup/carla-build.just"
-import? "./carla-setup/carla-rust.just"
-import? "./carla-setup/carla-common.just"
-import? "./carla-setup/carla-client.just"
-import? "./carla-setup/carla-server.just"
+import? "./carla-setup/just/carla-build.just"
+import? "./carla-setup/just/carla-rust.just"
+import? "./carla-setup/just/carla-common.just"
+import? "./carla-setup/just/carla-client.just"
+import? "./carla-setup/just/carla-server.just"
 
 # Mandatory imports
 import "./just/utils.just"
