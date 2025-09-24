@@ -14,14 +14,46 @@
 // limitations under the License.
 //
 
+use clap::Parser;
 use pid_controller::PIDController;
 use uprotocol_handler::UProtocolHandler;
-use up_transport_zenoh::UPTransportZenoh;
-use up_rust::UUri;
+use up_transport_zenoh::{UPTransportZenoh, zenoh_config};
+use up_rust::{LocalUriProvider, StaticUriProvider};
 use log::info;
+use zenoh::{Config};
 
 mod pid_controller;
 mod uprotocol_handler;
+
+#[derive(Parser, Debug)]
+#[clap(author, version, about, long_about = None)]
+struct Args {
+    #[clap(long, default_value = "127.0.0.1")]
+    host: String,
+    #[clap(long, default_value_t = 2000)]
+    port: u16,
+    #[clap(long, default_value = "CruiseControl")]
+    role: String,
+    #[clap(long, default_value_t = 0.100)]
+    delta: f64,
+    #[clap(long, default_value = None)]
+    router: Option<String>,
+}
+
+// Helper function to create a Zenoh configuration
+pub(crate) fn get_zenoh_config() -> zenoh_config::Config {
+    let args = Args::parse();
+
+    let zenoh_string = if let Some(router) = &args.router {
+        format!("{{ mode: 'peer', connect: {{ endpoints: [ 'tcp/{}:7447' ] }} }}", router)
+    } else {
+        "{ mode: 'peer' }".to_string()
+    };
+
+    let zenoh_config = Config::from_json5(&zenoh_string).expect("Failed to load Zenoh config");
+
+    zenoh_config
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -38,12 +70,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     let pid = PIDController::new(kp, ki, kd);
 
-    // Create entity URI for the PID controller
-    let entity_uri = UUri::try_from_parts("CruiseControl", 0, 2, 0)?;
-    let entity_uri_string: String = (&entity_uri).into();
-
+    // Create a uProtocol URI provider for the PID controller
+    // This defines the identity of this node in the uProtocol network
+    let uri_provider = StaticUriProvider::new("CruiseControl", 0, 2);
+    
     // Initialize uProtocol transport with Zenoh
-    let transport = UPTransportZenoh::new(Default::default(), entity_uri_string).await?;
+    let transport = UPTransportZenoh::builder(uri_provider.get_authority())
+        .expect("invalid authority name")
+        .with_config(get_zenoh_config())
+        .build()
+        .await?;
 
     let handler = UProtocolHandler::new(pid, transport)?;
 
