@@ -14,8 +14,122 @@
 // limitations under the License.
 //
 
-#[cfg(feature = "carla")]
-use carla::client::{ActorBase, Client};
+// Replace CARLA imports with mock when testing
+mod mock_carla {
+    use std::time::Duration;
+    
+    pub struct MockClient;
+    pub struct MockWorld;
+    pub struct MockActor;
+    pub struct MockVehicle;
+    pub struct MockSnapshot {
+        pub timestamp: MockTimestamp,
+    }
+    pub struct MockTimestamp {
+        pub elapsed_seconds: f64,
+        pub platform_timestamp: f64,
+    }
+    
+    #[derive(Default)]
+    pub struct MockControl {
+        pub throttle: f32,
+        pub steer: f32,
+        pub brake: f32,
+    }
+    
+    impl MockClient {
+        pub fn connect(_host: &str, _port: u16, _timeout: Option<Duration>) -> Self {
+            println!("Mock CARLA client connected");
+            Self
+        }
+        
+        pub fn set_timeout(&mut self, _timeout: Duration) {}
+        pub fn world(&mut self) -> MockWorld { MockWorld }
+    }
+    
+    impl MockWorld {
+        pub fn settings(&mut self) -> MockSettings { MockSettings::default() }
+        pub fn apply_settings(&mut self, _settings: &MockSettings, _timeout: Duration) {}
+        pub fn wait_for_tick(&mut self) -> MockSnapshot { 
+            MockSnapshot { 
+                timestamp: MockTimestamp {
+                    elapsed_seconds: std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs_f64(),
+                    platform_timestamp: std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .unwrap()
+                        .as_secs_f64(),
+                }
+            }
+        }
+        pub fn actors(&self) -> MockActorList { MockActorList }
+        pub fn actor(&self, _id: u32) -> Option<MockActor> { Some(MockActor) }
+    }
+    
+    #[derive(Default)]
+    pub struct MockSettings {
+        pub synchronous_mode: bool,
+        pub fixed_delta_seconds: Option<f64>,
+    }
+    
+    pub struct MockActorList;
+    impl MockActorList {
+        pub fn iter(&self) -> std::iter::Once<MockActor> {
+            std::iter::once(MockActor)
+        }
+    }
+    
+    impl MockActor {
+        pub fn id(&self) -> u32 { 12345 }
+        pub fn attributes(&self) -> MockAttributeList { MockAttributeList }
+        pub fn into_kinds(self) -> MockActorKinds { MockActorKinds }
+    }
+    
+    pub struct MockAttributeList;
+    impl MockAttributeList {
+        pub fn iter(&self) -> std::iter::Once<MockAttribute> {
+            std::iter::once(MockAttribute)
+        }
+    }
+    
+    pub struct MockAttribute;
+    impl MockAttribute {
+        pub fn id(&self) -> &str { "role_name" }
+        pub fn value_string(&self) -> String { "ego_vehicle".to_string() }
+    }
+    
+    pub struct MockActorKinds;
+    impl MockActorKinds {
+        pub fn try_into_vehicle(self) -> Result<MockVehicle, ()> {
+            Ok(MockVehicle)
+        }
+    }
+    
+    impl MockVehicle {
+        pub fn velocity(&self) -> MockVector3D { MockVector3D { x: 10.0, y: 0.0, z: 0.0 } }
+        pub fn control(&self) -> MockControl { MockControl::default() }
+        pub fn apply_control(&self, control: &MockControl) {
+            println!("Applied control: throttle={}, steer={}, brake={}", 
+                control.throttle, control.steer, control.brake);
+        }
+    }
+    
+    pub struct MockVector3D { pub x: f32, pub y: f32, pub z: f32 }
+    impl MockVector3D {
+        pub fn norm(&self) -> f32 { (self.x * self.x + self.y * self.y + self.z * self.z).sqrt() }
+    }
+    
+    impl MockSnapshot {
+        pub fn timestamp(&self) -> &MockTimestamp { &self.timestamp }
+    }
+    
+    // Type alias for Client to match the usage in main
+    pub type Client = MockClient;
+}
+
+use mock_carla::*;
 
 use clap::Parser;
 use log;
@@ -25,7 +139,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use async_trait::async_trait;
 use std::{str::FromStr};
-use zenoh::{bytes::Encoding, key_expr::KeyExpr, Config};
+use zenoh::{key_expr::KeyExpr, Config};
 use up_rust::{LocalUriProvider, StaticUriProvider, UMessageBuilder, UPayloadFormat, UTransport,UListener, UMessage, UUri};
 use up_transport_zenoh::UPTransportZenoh;
 
@@ -45,9 +159,6 @@ const MAX_BRAKING:  f32 = 1.0;
 // uProtocol resource IDs
 const RESOURCE_VELOCITY_STATUS: u16 = 0x8001;
 const RESOURCE_CLOCK_STATUS: u16 = 0x8002;
-
-#[cfg(not(feature = "carla"))]
-type Client = ();
 
 #[derive(Parser, Debug)]
 #[clap(author, version, about, long_about = None)]
@@ -114,7 +225,7 @@ impl UListener for EngageListener {
             let value = String::from_utf8(payload.to_vec()).unwrap_or_else(|_| "Invalid UTF-8".to_string());
             log::trace!("[from_uprotocol] engage : {}", value);
             
-            // Update the shared data structure with the new value
+// Update the shared data structure with the new value
             // This is where the lock is acquired and the data is updated
             let mut data = self.data.lock().unwrap();
             *data = Some(value);
@@ -142,8 +253,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>>{
         running_clone.store(false, Ordering::SeqCst);
     }).expect("Error setting Ctrl-C handler");
 
-    // Connect to the Carla Server
-    log::info!("Connecting to the Carla Server at {}:{}...", args.host, args.port);
+    // Connect to the Mock Carla Server
+    log::info!("Connecting to the Mock Carla Server at {}:{}...", args.host, args.port);
 
     let mut carla_client = Client::connect(&args.host, args.port, None);
 
@@ -169,7 +280,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>>{
     while running.load(Ordering::SeqCst) && ego_vehicle_id.is_none() {
         log::info!("Waiting for the Ego Vehicle actor...");
 
-        // Syncronize Carla's world
+        // Synchronize Carla's world
         let _ = carla_world.wait_for_tick();
 
         // Check if the Ego Vehicle actor exists in the world
@@ -311,7 +422,6 @@ async fn main() -> Result<(), Box<dyn std::error::Error>>{
     });
 
     let mut last_time: f64 = 0.0;
-    let attachment: Option<String> = None;
 
     // Main loop
     while running.load(Ordering::SeqCst) {
@@ -449,4 +559,3 @@ async fn main() -> Result<(), Box<dyn std::error::Error>>{
     // Return success when the program exits
     Ok(())
 }
-

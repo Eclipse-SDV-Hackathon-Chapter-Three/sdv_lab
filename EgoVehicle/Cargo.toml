@@ -16,13 +16,11 @@
 
 [package]
 name = "zenoh-vehicle"
-include = ["/src/*", "/examples/*"]
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
 
 [dependencies]
 async-trait = "0.1.89"
-carla = { path = "../../../temp/carla-rust/carla" }
 clap = { version = "4.5.4", features = ["derive"] }
 ctrlc = "3.4"
 log = "0.4"
@@ -32,3 +30,20 @@ up-rust = "0.7.0"
 up-transport-zenoh = "0.8.0"
 zenoh = { version = "1.0.0-rc.2" }
 
+[[bin]]
+name = "ego_vehicle"
+path = "src/main.rs"
+required-features = ["carla"]
+
+[[bin]]
+name = "mock_vehicle"
+path = "src/mock_vehicle.rs"
+
+#
+# for mock usage without Carla Client connection, comment carla dependencies and run:
+# RUST_LOG=trace cargo run --release --features mock-carla
+#
+# Only include carla when the carla feature is enabled
+[dependencies.carla]
+path = "../temp/carla-rust/carla"
+optional = true

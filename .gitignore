@@ -1,1 +1,4 @@
+.vscode
 **/target
+**/logs
+*.log
