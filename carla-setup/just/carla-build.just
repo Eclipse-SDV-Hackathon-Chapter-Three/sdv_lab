@@ -93,8 +93,7 @@ build-libcarla: (_check_host build_host)
   @cd {{ carla_source }} && git apply {{ source_patch }} || true
   @cd {{ carla_source }} && rm -rf .git
   # Build carla
-  # @. {{ user_bashrc }} && cd {{ carla_source }} && make {{ build_target }}
-  @cd {{ carla_source }} && CXXFLAGS="-stdlib=libstdc++" LDFLAGS="-stdlib=libstdc++" make {{ build_target }}
+  @. {{ user_bashrc }} && cd {{ carla_source }} && make {{ build_target }}
   # Show libcarla
   @just _list_file {{ build_output }}
   # Update bashrc

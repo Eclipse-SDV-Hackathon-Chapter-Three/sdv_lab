@@ -18,6 +18,11 @@ recast_link   := "recast-0b13b0-c" + clang_version + "-install"
 _clone_carla_rust: (_check_host rust_host)
   @just _clone_repo {{ rust_repo }} {{ rust_tag }} {{ rust_dir }}
 
+# Install Rust Language tools
+_install_rust: (_check_host rust_host)
+  # Run rustup
+  @curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+
 [group('Carla Build')]
 [doc('Build CARLA API (Rust)')]
 make-carla: (_check_host rust_host)
@@ -31,7 +36,7 @@ make-carla: (_check_host rust_host)
   @cd {{ carla_build }} && unlink {{ recast_link }} || true
   @cd {{ carla_build }} && ln -s {{ recast_target }} {{ recast_link }}
   # Ensure rust
-  @just install-rust
+  @just _install_rust
   # Apply patch
   @cp {{ source_directory() }}/{{ rust_patch }} {{ rust_dir }}
   @cd {{ rust_dir }} && git apply {{ rust_patch }} || true
