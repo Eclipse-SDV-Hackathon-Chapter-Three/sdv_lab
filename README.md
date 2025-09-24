@@ -7,15 +7,28 @@ The challenge comes with a demo scenario, called the `Cruise Control`, running a
 
 ## Cruise Control Scenario Architecture
 
-The architecture of the project is described in the file `architecture/Cruise_Control.svg`.
+![Cruise Control Scenario Architecture](./architecture/sdv_lab_cc.png)
 
 ## Prerequisites
 
-You will need two computers with Ubuntu versions 22.04 or 24.04. One for deploying the applications inside the SDV Lab and the other one for deploying the CARLA simulator. If you do not have a notebook supporing CARLA to run, get a notebook from the hack coache setup with CARLA already or connect to CARLA notebooks hosted in Porto using `tailscale` if you are in Berlin.
+- Your notebook
+- Notebook with GPU and Ubuntu 22.04 or 24.04 (LTS) from hack coaches
+
+On your notebook you will connect the ThreadX microcontroller for development and input.
+
+The shared notebooks from the hack coaches are equipped with enough computing resources to run Carla simulator and the cruise controll applications.
 
 ## Installation
 
-### PC1
+### Your PC
+
+Connect the ThreadX Microcontroller via USB.
+
+**Note:** If you use a WSL2, you need to enable USB support according to the [Microsoft WSL2 USB Docs](https://learn.microsoft.com/de-de/windows/wsl/connect-usb).
+
+### GPU Notebook
+
+This is the notebook shared from the hack coaches.
 
 #### CARLA
 
@@ -28,8 +41,6 @@ For additional details please check the page [CARLA installation](https://carla.
 #### Install the Android Cuttlefish IVI
 
 On the PC where CARLA is running, install the Android Cuttlefish IVI (`aaos_digital_cluster`).
-
-### PC2
 
 #### Install Podman
 
@@ -62,15 +73,29 @@ cp /etc/systemd/system/ank-server.service ~/.config/systemd/user/ank-server.serv
 cp /etc/systemd/system/ank-agent.service ~/.config/systemd/user/ank-agent.service
 ```
 
+Open the `~/.config/systemd/user/ank-server.service` and append `--address 0.0.0.0:25551` as CLI argument to the `ank-server` process. This makes the Ankaios Server available on all interfaces of the notebook. The advantage is, that you can install the `ank-cli` also on your notebook and connect to the remote Ankaios cluster applying changes if you change some of the default workloads for the cruise control scenario.
+
+You can just export the remote Ankaios server address via env variable and use the `ank-cli` on your notebook:
+
+```shell
+export ANK_SERVER_URL=<ip_of_remote_nic>
+```
+
+Then you can execute any Ankaios CLI command on the remote Ankaios cluster:
+
+```shell
+ank get workloads
+```
+
 ## Run
 
 Start the `cruise control` scenario by starting:
 
-- CARLA on PC1
-- AAOS Digital Cluster (Android Cuttlefish IVI) on PC1
-- Eclipse Ankaios cluster on PC2
+- CARLA
+- AAOS Digital Cluster (Android Cuttlefish IVI)
+- Eclipse Ankaios cluster
 - Applying the Ankaios manifest [cruise_control.yaml](./cruise_control.yaml)
-
+- Flashing and starting the ThreadX board on your notebook
 
 ### Run CARLA
 
@@ -90,6 +115,7 @@ TODO!
 ### Build the container images
 
 For the EgoVehicle like described in the [EgoVehicle/README.md](./EgoVehicle/README.md#build-for-deployment) (just one script call!).
+Build the PID Controller workload like described in `TODO! link the pid controller README of the Rust version`.
 
 ### Run Ankaios
 
