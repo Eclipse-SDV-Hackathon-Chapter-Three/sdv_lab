@@ -14,13 +14,14 @@
 // limitations under the License.
 //
 
+use log::info;
 use clap::Parser;
-use pid_controller::PIDController;
-use uprotocol_handler::UProtocolHandler;
 use up_transport_zenoh::{UPTransportZenoh, zenoh_config};
 use up_rust::{LocalUriProvider, StaticUriProvider};
-use log::info;
 use zenoh::{Config};
+
+use pid_controller::PIDController;
+use uprotocol_handler::UProtocolHandler;
 
 mod pid_controller;
 mod uprotocol_handler;

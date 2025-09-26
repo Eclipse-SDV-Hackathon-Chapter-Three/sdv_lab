@@ -14,15 +14,45 @@
 // limitations under the License.
 //
 
-use std::str::FromStr;
-use std::sync::Arc;
 use std::time::SystemTime;
 use tokio::time::{sleep, Duration};
 use rand::Rng;
+
+use clap::Parser;
 use log::{info, error};
-use up_rust::{UUri, UTransport, UMessageBuilder, UPayloadFormat};
-use up_transport_zenoh::UPTransportZenoh;
-use zenoh::config::{Config, EndPoint};
+use up_transport_zenoh::{UPTransportZenoh, zenoh_config};
+use up_rust::{LocalUriProvider, StaticUriProvider, UUri, UMessageBuilder, UTransport, UPayloadFormat};
+use zenoh::{Config};
+
+#[derive(Parser, Debug)]
+#[clap(author, version, about, long_about = None)]
+struct Args {
+    #[clap(long, default_value = "127.0.0.1")]
+    host: String,
+    #[clap(long, default_value_t = 2000)]
+    port: u16,
+    #[clap(long, default_value = "CruiseControl")]
+    role: String,
+    #[clap(long, default_value_t = 0.100)]
+    delta: f64,
+    #[clap(long, default_value = None)]
+    router: Option<String>,
+}
+
+// Helper function to create a Zenoh configuration
+pub(crate) fn get_zenoh_config() -> zenoh_config::Config {
+    let args = Args::parse();
+
+    let zenoh_string = if let Some(router) = &args.router {
+        format!("{{ mode: 'peer', connect: {{ endpoints: [ 'tcp/{}:7447' ] }} }}", router)
+    } else {
+        "{ mode: 'peer' }".to_string()
+    };
+
+    let zenoh_config = Config::from_json5(&zenoh_string).expect("Failed to load Zenoh config");
+
+    zenoh_config
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
@@ -31,24 +61,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     
     info!("*** Started uProtocol Publisher");
 
-    // Configure Zenoh
-    let mut zenoh_config = Config::default();
-    zenoh_config
-        .connect
-        .endpoints
-        .set(vec![
-            EndPoint::from_str("tcp/127.0.0.1:7447").expect("Unable to set endpoint"),
-        ])
-        .expect("Unable to set Zenoh Config");
-
-    // Create publisher entity URI - this represents the publisher itself
-    let publisher_uri = UUri::try_from_parts("Publisher", 0x1000, 1, 0)?;
-    let publisher_uri_string: String = (&publisher_uri).into();
-
+    // Create a uProtocol URI provider for the PID controller
+    // This defines the identity of this node in the uProtocol network
+    let uri_provider = StaticUriProvider::new("VehicleSimulator", 0, 2);
+    
     // Initialize uProtocol transport with Zenoh
-    let transport: Arc<dyn UTransport> = Arc::new(
-        UPTransportZenoh::new(zenoh_config, publisher_uri_string).await?
-    );
+    let transport = UPTransportZenoh::builder(uri_provider.get_authority())
+        .expect("invalid authority name")
+        .with_config(get_zenoh_config())
+        .build()
+        .await?;
+
 
     // Create URIs for publishing according to the mapping table
     let clock_uri = UUri::try_from_parts("EGOVehicle", 0, 2, 0x8002)?;      // vehicle/status/clock_status
@@ -76,7 +99,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             .as_secs_f64();
 
         // Publish current timestamp
-        let clock_payload = format!("{}", current_time + 0.3517);
+        let clock_payload = format!("{}", current_time);
         let message = UMessageBuilder::publish(clock_uri.clone())
             .build_with_payload(clock_payload.clone(), UPayloadFormat::UPAYLOAD_FORMAT_TEXT)
             .unwrap();
