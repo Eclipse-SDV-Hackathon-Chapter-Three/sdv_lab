@@ -1158,29 +1158,33 @@ class CameraManager(object):
         self.sensors = [
             ['sensor.camera.rgb', cc.Raw, 'Camera RGB', {}],
             ['sensor.camera.depth', cc.Raw, 'Camera Depth (Raw)', {}],
-            ['sensor.camera.depth', cc.Depth, 'Camera Depth (Gray Scale)', {}],
-            ['sensor.camera.depth', cc.LogarithmicDepth, 'Camera Depth (Logarithmic Gray Scale)', {}],
-            ['sensor.camera.semantic_segmentation', cc.Raw, 'Camera Semantic Segmentation (Raw)', {}],
-            ['sensor.camera.semantic_segmentation', cc.CityScapesPalette, 'Camera Semantic Segmentation (CityScapes Palette)', {}],
-            ['sensor.camera.instance_segmentation', cc.CityScapesPalette, 'Camera Instance Segmentation (CityScapes Palette)', {}],
-            ['sensor.camera.instance_segmentation', cc.Raw, 'Camera Instance Segmentation (Raw)', {}],
-            ['sensor.lidar.ray_cast', None, 'Lidar (Ray-Cast)', {'range': '50'}],
-            ['sensor.camera.dvs', cc.Raw, 'Dynamic Vision Sensor', {}],
-            ['sensor.camera.rgb', cc.Raw, 'Camera RGB Distorted',
-                {'lens_circle_multiplier': '3.0',
-                'lens_circle_falloff': '3.0',
-                'chromatic_aberration_intensity': '0.5',
-                'chromatic_aberration_offset': '0'}],
-            ['sensor.camera.optical_flow', cc.Raw, 'Optical Flow', {}],
-            ['sensor.camera.normals', cc.Raw, 'Camera Normals', {}],
+            # ['sensor.camera.depth', cc.Depth, 'Camera Depth (Gray Scale)', {}],
+            # ['sensor.camera.depth', cc.LogarithmicDepth, 'Camera Depth (Logarithmic Gray Scale)', {}],
+            # ['sensor.camera.semantic_segmentation', cc.Raw, 'Camera Semantic Segmentation (Raw)', {}],
+            # ['sensor.camera.semantic_segmentation', cc.CityScapesPalette, 'Camera Semantic Segmentation (CityScapes Palette)', {}],
+            # ['sensor.camera.instance_segmentation', cc.CityScapesPalette, 'Camera Instance Segmentation (CityScapes Palette)', {}],
+            # ['sensor.camera.instance_segmentation', cc.Raw, 'Camera Instance Segmentation (Raw)', {}],
+            # ['sensor.lidar.ray_cast', None, 'Lidar (Ray-Cast)', {'range': '50'}],
+            # ['sensor.camera.dvs', cc.Raw, 'Dynamic Vision Sensor', {}],
+            # ['sensor.camera.rgb', cc.Raw, 'Camera RGB Distorted',
+                # {'lens_circle_multiplier': '3.0',
+                # 'lens_circle_falloff': '3.0',
+                # 'chromatic_aberration_intensity': '0.5',
+                # 'chromatic_aberration_offset': '0'}],
+            # ['sensor.camera.optical_flow', cc.Raw, 'Optical Flow', {}],
+            # ['sensor.camera.normals', cc.Raw, 'Camera Normals', {}],
         ]
         world = self._parent.get_world()
         bp_library = world.get_blueprint_library()
         for item in self.sensors:
             bp = bp_library.find(item[0])
             if item[0].startswith('sensor.camera'):
-                bp.set_attribute('image_size_x', str(hud.dim[0]))
-                bp.set_attribute('image_size_y', str(hud.dim[1]))
+                # Reduce camera resolution
+                bp.set_attribute('image_size_x', '640')
+                bp.set_attribute('image_size_y', '480')
+                bp.set_attribute('fov', '90')
+                # Match simulation rate
+                bp.set_attribute('sensor_tick', '0.033')  # 30 FPS
                 if bp.has_attribute('gamma'):
                     bp.set_attribute('gamma', str(gamma_correction))
                 for attr_name, attr_value in item[3].items():
@@ -1296,9 +1300,10 @@ def game_loop(args):
         if args.sync:
             original_settings = sim_world.get_settings()
             settings = sim_world.get_settings()
-            if not settings.synchronous_mode:
-                settings.synchronous_mode = True
-                settings.fixed_delta_seconds = 0.05
+            # if not settings.synchronous_mode:
+            settings.synchronous_mode = True
+            # settings.fixed_delta_seconds = 0.05 # 20 FPS
+            settings.fixed_delta_seconds = 0.016  # 60 FPS
             sim_world.apply_settings(settings)
 
             traffic_manager = client.get_trafficmanager()
@@ -1313,6 +1318,9 @@ def game_loop(args):
             pygame.HWSURFACE | pygame.DOUBLEBUF)
         display.fill((0,0,0))
         pygame.display.flip()
+
+        os.environ['SDL_VIDEODRIVER'] = 'x11'
+        # os.environ['DISPLAY'] = ':0'
 
         hud = HUD(args.width, args.height)
         world = World(sim_world, hud, args)
