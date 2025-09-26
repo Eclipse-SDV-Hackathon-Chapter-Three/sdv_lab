@@ -1,0 +1,9 @@
+apiVersion: v0.1
+workloads:
+  cruise_control_app:
+    runtime: podman
+    agent: agent_A
+    restartPolicy: NEVER
+    runtimeConfig: |
+      image: cruise-control-app:0.1
+      commandOptions: ["-e", "RUST_LOG=debug", "--net=host"]
