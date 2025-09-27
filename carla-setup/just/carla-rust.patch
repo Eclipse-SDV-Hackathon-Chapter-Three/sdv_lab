@@ -1,0 +1,157 @@
+diff --git a/carla-src/Cargo.toml b/carla-src/Cargo.toml
+index 4206823..ef957d6 100644
+--- a/carla-src/Cargo.toml
++++ b/carla-src/Cargo.toml
+@@ -28,3 +28,4 @@ serde = { version = "1.0.197", features = ["derive"] }
+ sha2 = "0.10.8"
+ tar = "0.4.40"
+ ureq = { version = "2.9.6", features = ["native-tls"] }
++walkdir = "2.5"
+diff --git a/carla-src/src/libcarla_client.rs b/carla-src/src/libcarla_client.rs
+index 619fadc..9cf0972 100644
+--- a/carla-src/src/libcarla_client.rs
++++ b/carla-src/src/libcarla_client.rs
+@@ -1,7 +1,7 @@
+ use crate::{probe, Probe};
+ use anyhow::{bail, Context, Result};
+-use fs_extra::dir::CopyOptions;
+ use std::{fs, path::Path, process::Command};
++use walkdir::WalkDir;
+ 
+ pub const VERSION: &str = "0.9.14";
+ 
+@@ -57,58 +57,44 @@ where
+     {
+         let tgt_include_dir = tgt_dir.join("include");
+         fs::create_dir_all(&tgt_include_dir)?;
+-
+         for dir in include_dirs.into_vec() {
+-            fs_extra::dir::copy(
+-                &dir,
+-                &tgt_include_dir,
+-                &CopyOptions {
+-                    overwrite: true,
+-                    skip_exist: false,
+-                    copy_inside: true,
+-                    content_only: true,
+-                    ..Default::default()
+-                },
+-            )
+-            .with_context(|| {
+-                format!(
+-                    "Unable to copy directory from\
+-                           '{}'\
+-                           to\
+-                           '{}'",
+-                    dir.display(),
+-                    tgt_include_dir.display()
+-                )
+-            })?;
++            for entry in WalkDir::new(&dir) {
++                let entry = entry?;
++                if entry.file_type().is_file() {
++                    let rel_path = entry.path().strip_prefix(&dir)?;
++                    let dest_path = tgt_include_dir.join(rel_path);
++                    if dest_path.exists() {
++                        if std::fs::read(entry.path())? == std::fs::read(&dest_path)? {
++                            continue; // skip identical file
++                        }
++                    } else if let Some(parent) = dest_path.parent() {
++                        std::fs::create_dir_all(parent)?;
++                    }
++                    std::fs::copy(entry.path(), &dest_path)?;
++                }
++            }
+         }
+     }
+ 
+     {
+         let tgt_lib_dir = tgt_dir.join("lib");
+         fs::create_dir_all(&tgt_lib_dir)?;
+-
+         for dir in lib_dirs.into_vec() {
+-            fs_extra::dir::copy(
+-                &dir,
+-                &tgt_lib_dir,
+-                &CopyOptions {
+-                    overwrite: true,
+-                    skip_exist: false,
+-                    copy_inside: true,
+-                    content_only: true,
+-                    ..Default::default()
+-                },
+-            )
+-            .with_context(|| {
+-                format!(
+-                    "Unable to copy directory from\
+-                           '{}'\
+-                           to\
+-                           '{}'",
+-                    dir.display(),
+-                    tgt_lib_dir.display()
+-                )
+-            })?;
++            for entry in WalkDir::new(&dir) {
++                let entry = entry?;
++                if entry.file_type().is_file() {
++                    let rel_path = entry.path().strip_prefix(&dir)?;
++                    let dest_path = tgt_lib_dir.join(rel_path);
++                    if dest_path.exists() {
++                        if std::fs::read(entry.path())? == std::fs::read(&dest_path)? {
++                            continue; // skip identical file
++                        }
++                    } else if let Some(parent) = dest_path.parent() {
++                        std::fs::create_dir_all(parent)?;
++                    }
++                    std::fs::copy(entry.path(), &dest_path)?;
++                }
++            }
+         }
+     }
+ 
+diff --git a/carla-sys/Cargo.toml b/carla-sys/Cargo.toml
+index 0168729..6c39d5f 100644
+--- a/carla-sys/Cargo.toml
++++ b/carla-sys/Cargo.toml
+@@ -21,6 +21,7 @@ autocxx-build = { version = "0.26.0" }
+ carla-src = { version = "0.11.0", path = "../carla-src" }
+ json5 = "0.4.1"
+ once_cell = "1.19.0"
++pkg-config = "0.3"
+ serde = { version = "1.0.197", features = ["derive"] }
+ sha2 = "0.10.8"
+ tar = "0.4.40"
+diff --git a/carla-sys/build.rs b/carla-sys/build.rs
+index e4fdee1..939df97 100644
+--- a/carla-sys/build.rs
++++ b/carla-sys/build.rs
+@@ -31,7 +31,6 @@ static DOWNLOAD_PREBUILT_TARBALL: Lazy<PathBuf> = Lazy::new(|| {
+     OUT_DIR.join(file_name)
+ });
+ static CARGO_MANIFEST_DIR: Lazy<&Path> = Lazy::new(|| Path::new(env!("CARGO_MANIFEST_DIR")));
+-static GENERATED_DIR: Lazy<PathBuf> = Lazy::new(|| CARGO_MANIFEST_DIR.join("generated"));
+ 
+ fn main() -> Result<()> {
+     // Set rerun triggers
+@@ -54,6 +53,8 @@ fn main() -> Result<()> {
+ 
+     // Add library search paths
+     println!("cargo:rustc-link-search=native={}", carla_lib_dir.display());
++    // Use pkg-config to find and link libpng
++    pkg_config::probe_library("libpng")?;
+ 
+     // Link libraries
+     for lib in libcarla_client::LIBS {
+diff --git a/carla/src/traffic_manager/action_buffer.rs b/carla/src/traffic_manager/action_buffer.rs
+index 5c6b167..1a31622 100644
+--- a/carla/src/traffic_manager/action_buffer.rs
++++ b/carla/src/traffic_manager/action_buffer.rs
+@@ -40,7 +40,7 @@ impl ActionBuffer {
+ 
+     pub(crate) fn as_slice(&self) -> &[FfiAction] {
+         let ptr = self.inner.as_ptr();
+-        unsafe { slice::from_raw_parts(ptr, self.len()) }
++        unsafe { slice::from_raw_parts(ptr as *const FfiAction, self.len()) }
+     }
+ 
+     pub(crate) fn from_cxx(ptr: UniquePtr<FfiActionBuffer>) -> Option<Self> {

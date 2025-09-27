@@ -1,0 +1,45 @@
+#
+#  Copyright (c) 2025 The X-Verse <https://github.com/The-Xverse>
+#
+#  Licensed under the Apache License, Version 2.0 (the "License");
+#  you may not use this file except in compliance with the License.
+#  You may obtain a copy of the License at
+#
+#      http://www.apache.org/licenses/LICENSE-2.0
+#
+#  Unless required by applicable law or agreed to in writing, software
+#  distributed under the License is distributed on an "AS IS" BASIS,
+#  WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+#  See the License for the specific language governing permissions and
+#  limitations under the License.
+#
+
+[package]
+name = "ego-vehicle"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+async-trait = { version = "0.1.89" }
+carla = { version = "0.11.1" }
+carla-data-serde = { git = "ssh://git@github.com/Eclipse-SDV-Hackathon-Chapter-Three/carla-data-serde.git", branch = "main" }
+clap = { version = "4.5.4", features = ["derive"] }
+ctrlc = "3.4"
+log = "0.4"
+nalgebra = { version = "=0.32.6", features = ["serde-serialize"] }
+ndarray = { version = "=0.15.6", features = ["serde"] }
+pretty_env_logger = "0.4"
+serde = { version = "1.0" }
+serde_json = { version = "1" }
+tokio = { version = "1", features = ["full"] }
+up-rust = { version = "0.7.0" }
+up-transport-zenoh = { version = "0.8" }
+zenoh = { version = "1.0.0-rc.2" }
+
+[patch.crates-io]
+# point the carla crate at your fork/branch
+carla = { git = "https://github.com/Eclipse-SDV-Hackathon-Chapter-Three/carla-rust.git", branch = "action-buffer-fix", package = "carla" }
+
+# optional but nice: also point carla-sys at the same repo (same branch)
+# (the repo contains both crates in a workspace)
+carla-sys = { git = "https://github.com/Eclipse-SDV-Hackathon-Chapter-Three/carla-rust.git", branch = "action-buffer-fix", package = "carla-sys" }

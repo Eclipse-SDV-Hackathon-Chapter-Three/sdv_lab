@@ -1,7 +1,164 @@
-# sdv_lab
+
+
+# SDV Lab
+
 Simulate a realistic, modular, and cyber-physical Software-Defined Vehicle (SDV) development environment where teams can design, implement, and demonstrate an SDV feature that
 operates across a virtual platform.
 
-The architecture of the project is described in the file /architecture/Cruise_Control.svg.
+SDV Lab is a collection of examples about how to use Eclipse projects and other Open Source projects, such as CARLA and Android, to rapidly develop realistic vehicle features, and then simulate and test them in a virtual envirionment.
 
-In the file /ankaios/README.md is described how to setup the environment. 
+![SDV Lab](https://github.com/Eclipse-SDV-Hackathon-Chapter-Three/sdv_lab/blob/main/assets/sdv_lab.png)
+
+## SDV Lab Framework
+
+The SDV Lab repository is organized in folders, where you can find simple examples of components connected to implement unique vehicle funtions. Inside the folders will you find README files with technical details about each example.
+
+![SW Componenents samples](https://github.com/Eclipse-SDV-Hackathon-Chapter-Three/sdv_lab/blob/main/assets/SW_Components.png)
+Each example is composed by 3 elements:
+ - Software Component A: Usually CARLA or Android Automotive application (AAOS). This component will be deployed in the shared computers with GPU capabilities.
+ - Software Component B: Application component developed in RUST or Python. This component can be developed and deployed in your own computer.
+ - Communication Bus: Protocol channel where the message and signal between the 2 components will be exchanged. The following protocols are available: [uProtocol](https://github.com/eclipse-uprotocol), [MQTT5](https://github.com/eclipse-mosquitto/mosquitto) and [Zenoh](https://github.com/eclipse-zenoh/zenoh).
+
+All Application Components and protocols bridges or brokers are conteinerized and managed using [Ankaios](https://github.com/eclipse-ankaios/ankaios). It means that you are able to run each example using simple Ankaios commands, as it will be described in the following sections.
+
+
+
+### Infrastructure
+
+For this event, each team will be provided with a dedicated Laptop (shared laptop) containing all the main SDV Lab components, which requires specific software and hardware configuration. Therefore, your main focus will be to develop applications to interact with those components.
+![Infra](https://github.com/Eclipse-SDV-Hackathon-Chapter-Three/sdv_lab/blob/main/assets/infra.png)
+Here is the list of applications provided by the Shared laptops:
+ - CARLA Simulator 0.9.15
+ - Android Studio
+ - MQTT Mosquitto Broker
+ - uStreamer (uProtocol)
+
+## SDV Lab - Challenge: Build Your Own ADAS or AD Feature
+
+### 🧠 Challenge Overview
+
+Your mission is to  **design and implement an Advanced Driver Assistance System (ADAS)**  or  **Autonomous Driving (AD)**  feature using the  **SDV Lab**  ecosystem.
+
+You are free to choose any ADAS or AD functionality and bring it to life using Eclipse projects and others open-source tools and blueprints.
+
+### 🎯 Objective
+
+Create a  **functional prototype**  of an ADAS or AD feature that:
+-   Uses SDV Lab framework, but you are free to choose any other Eclipse or Open-source solution.
+-   Demonstrates innovation, usability, and integration.
+-   Runs and test it in the simulated environment.
+-   Deploy and automated your application by using Ankaios.
+
+### 💡 Inspiration: ADAS & AD Feature Ideas
+
+Here are some ideas to spark your creativity:
+-   **Lane Detection & Departure Warning**
+-   **Driver Monitoring System**  (drowsiness, distraction detection)
+-   **Adaptive Cruise Control**
+-   **Emergency Steering  & Emergency Braking**
+-   **LiDAR-Camera Fusion for Object Detection**
+-   **Traffic Sign Recognition**
+-   **Autonomous Parking Assistant**
+
+### 🧪 Evaluation Criteria
+
+Your project will be judged based on:
+
+-   **Usability**  – Is it intuitive and practical?
+-   **Creativity**  – Is the idea novel or cleverly implemented?
+-   **Technical Complexity**  – How sophisticated is the solution?
+-   **Integration**  – How well does it use Eclipse solutions and blueprints?
+-   **Completeness**  – Is it functional and demonstrable?
+
+### 🧭 Getting Started
+
+1.  Choose your ADAS or AD feature.
+2.  Explore SDV Lab examples and Eclipse SDV Projects.
+3.  Design and Prototype your solution.
+4.  Create resonable documentation of your team project and be ready for the presentation.
+
+### 🏁 Final Notes
+
+-   All code must be developed during the hackathon.
+-   You can use simulators, virtual environments, and/or real hardware.
+-   Coaches will be available to guide you through tooling and architecture.
+
+## Prerequisites
+
+- Linux Notebook Ubuntu 22.04/24.04 or WSL2 or a Linux VM
+- Shared Notebook per team that you will get from the hack coaches
+
+## Installation
+
+### User Notebook
+
+On your notebook you will use [Eclipse Ankaios](https://eclipse-ankaios.github.io/ankaios/0.6) as embedded software orchestrator to start containerized workloads for this challenge. The example applications you can run are also managed by Ankaios.
+
+#### Install Podman
+
+As [Eclipse Ankaios](https://eclipse-ankaios.github.io/ankaios/0.6) as embedded software orchestrator is used to manage workloads inside the SDV Lab Challenge, you will need to install [Podman](https://docs.podman.io/en/latest/) as a container engine.
+
+You can install Podman easily with the package manager like in Ubuntu:
+
+```
+sudo apt-get update
+sudo apt-get -y install podman
+```
+
+Otherwise follow the official [Podman installation instructions](https://podman.io/docs/installation#installing-on-linux).
+
+#### Install Eclipse Ankaios
+
+Install [Eclipse Ankaios](https://eclipse-ankaios.github.io/ankaios/0.6) with a single curl according to the [Ankaios installation guide](https://eclipse-ankaios.github.io/ankaios/latest/usage/installation).
+
+Follow the `Setup with script` section and install the version Eclipse Ankaios [v0.6.0](https://github.com/eclipse-ankaios/ankaios/releases/tag/v0.6.0).
+
+**Note:** When using Ubuntu-24.04 disable AppArmor like discribed in the Ankaios installation guide.
+
+The installation script will automatically create a systemd service file for the Ankaios server and an Ankaios agent.
+
+### Shared Notebook
+
+As an participant you can ignore this section. The shared notebooks were already setup and this is only linked to reinstall the services if the shared notebook has some troubles.
+Look into the detailed [shared_notebooks.md](./shared_notebooks.md) about how to install the shared services on the shared notebooks from the hack coaches.
+
+## Run
+
+Start the `cruise control` scenario by starting:
+
+- CARLA on PC1
+- AAOS Digital Cluster (Android Cuttlefish IVI) on PC1
+- Eclipse Ankaios cluster on PC2
+- Applying the Ankaios manifest [cruise_control.yaml](./cruise_control.yaml)
+
+### Run Ankaios
+
+```shell
+sudo systemctl start ank-server ank-agent
+```
+
+### Apply the workload example manifest
+
+In each example workload folder you will find an Ankaios manifest which you can apply to your local running Ankaios cluster to start this example demo workload. Since the example workloads need to connect to services on the shared notebook, please find out the ip address of the shared notebook, connect your notebook to the Hack Wifi and replace remote address e.g. for MQTT broker to point to the external shared notebook NIC's ip address.
+
+Navigate to the example workload folder you want to run and apply the manifest, example:
+
+```shell
+cd uprotocol/cruise-control-app
+ank apply cruise-control-app.yaml
+```
+
+**Note:** If you want to remove all workloads specified in the Ankaios manifest for cleaning up you can simply add `-d` paramter to the `ank apply` like the following:
+`ank apply -d cruise-control-app.yaml`. This might be helpful for incremental development, when you change the example code.
+
+## Additional Ankaios commands
+
+```
+ank logs <workload_name> // Retrieve the logs from a workload
+ank get state // Retrieve information about the current Ankaios system
+ank get workloads // Information about the worloads running in the Ankaios system
+```
+
+## Workload starting other workloads
+
+Inside [ankaios/example_workloads/README.md](./ankaios/example_workloads/README.md) there are two example workloads, one using the Ankaios Python SDK and the other one using the Ankaios Rust SDK, both using the [Ankaios Control Interface](https://eclipse-ankaios.github.io/ankaios/0.6/reference/control-interface/) to instruct Ankaios as a workload to start dynamically other workloads. This is common in the SDV world since workloads do not have to run always. Workloads can start other workloads or you can manage the Ankaios cluster also from within a workload. If your specific use case in the SDV Lab needs such feature, you can start with the example workloads there as a template and adapt it for your needs.

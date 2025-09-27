@@ -1,0 +1,22 @@
+#!/usr/bin/env·just·--justfile
+
+# Ignore recipe lines beginning with '#'
+set ignore-comments := true
+
+# Optional imports
+import? "./just/carla-build.just"
+import? "./just/carla-rust.just"
+import? "./just/carla-common.just"
+import? "./just/carla-client.just"
+import? "./just/carla-server.just"
+
+# Mandatory imports
+import "./just/utils.just"
+
+# Main definitions
+main_repo := "sdv_lab"
+main_temp := main_repo/"temp"
+
+# Default recipe to display help information
+_default:
+  @just --list
