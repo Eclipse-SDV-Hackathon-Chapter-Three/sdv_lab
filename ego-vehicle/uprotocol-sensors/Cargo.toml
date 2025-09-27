@@ -20,6 +20,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+async-trait = { version = "0.1.89" }
 carla = { version = "0.11.1" }
 carla-data-serde = { git = "ssh://git@github.com/Eclipse-SDV-Hackathon-Chapter-Three/carla-data-serde.git", branch = "main" }
 clap = { version = "4.5.4", features = ["derive"] }

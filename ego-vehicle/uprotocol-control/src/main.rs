@@ -23,7 +23,7 @@ use std::sync::{Arc, Mutex};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use async_trait::async_trait;
-use std::{str::FromStr};
+use std::str::FromStr;
 use zenoh::{key_expr::KeyExpr, Config};
 use up_rust::{LocalUriProvider, StaticUriProvider, UMessageBuilder, UPayloadFormat, UTransport,UListener, UMessage, UUri};
 use up_transport_zenoh::UPTransportZenoh;
