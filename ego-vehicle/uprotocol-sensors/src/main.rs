@@ -59,6 +59,13 @@ const MAX_BRAKING:  f32 = 1.0;
 // uProtocol resource IDs
 const RESOURCE_VELOCITY_STATUS: u16 = 0x8001;
 const RESOURCE_CLOCK_STATUS: u16 = 0x8002;
+// uProtocol resource IDs for sensors
+const RESOURCE_LANE_INVASION_SENSOR: u16 = 0x8010;
+const RESOURCE_COLLISION_SENSOR: u16 = 0x8011;
+const RESOURCE_OBSTACLE_DETECTION_SENSOR: u16 = 0x8012;
+const RESOURCE_IMAGE_SENSOR: u16 = 0x8013;
+const RESOURCE_RADAR_SENSOR: u16 = 0x8014;
+const RESOURCE_LIDAR_SENSOR: u16 = 0x8015;
 
 // Helper function to create a Zenoh configuration
 pub(crate) fn get_zenoh_config() -> zenoh_config::Config {
@@ -325,8 +332,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>>{
         if let Some(ego_vehicle_sensor_lane_invasion_role) =
             args.ego_vehicle_sensor_lane_invasion_role
         {
-            let uuri = UUri::try_from_parts("adas_compute", 0x0000_5a6b, 0x01, 0x0001)
-                .expect("Invalid UUri");
+            let uuri = uri_provider.get_resource_uri(RESOURCE_LANE_INVASION_SENSOR);
 
             // Encoder: LaneInvasionEvent -> Vec<u8>
             let encode = |evt: LaneInvasionEvent| {
@@ -363,8 +369,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>>{
     // -- Set up Sensor for Collision -- (generic)
     let (_collision_comms, _ego_vehicle_sensor_collision_id, _collision_sensor_keepalive) =
         if let Some(ego_vehicle_sensor_collision_role) = args.ego_vehicle_sensor_collision_role {
-            let uuri = UUri::try_from_parts("adas_compute", 0x0000_5a6b, 0x01, 0x0002)
-                .expect("Invalid UUri");
+            let uuri = uri_provider.get_resource_uri(RESOURCE_COLLISION_SENSOR);
 
             // Encoder: CollisionEvent -> Vec<u8>
             let encode = |evt: CollisionEvent| {
@@ -407,8 +412,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>>{
     ) = if let Some(ego_vehicle_sensor_obstacle_detection_role) =
         args.ego_vehicle_sensor_obstacle_detection_role
     {
-        let uuri =
-            UUri::try_from_parts("adas_compute", 0x0000_5a6b, 0x01, 0x0003).expect("Invalid UUri");
+        let uuri = uri_provider.get_resource_uri(RESOURCE_OBSTACLE_DETECTION_SENSOR);
 
         // Encoder: ObstacleDetectionEvent -> Vec<u8>
         let encode = |evt: ObstacleDetectionEvent| {
@@ -449,8 +453,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>>{
     // -- Set up Sensor for Image -- (generic)
     let (_image_comms, _ego_vehicle_sensor_image_id, _image_sensor_keepalive) =
         if let Some(ego_vehicle_sensor_image_role) = args.ego_vehicle_sensor_image_role {
-            let uuri = UUri::try_from_parts("adas_compute", 0x0000_5a6b, 0x01, 0x0004)
-                .expect("Invalid UUri");
+        let uuri = uri_provider.get_resource_uri(RESOURCE_IMAGE_SENSOR);
 
             // Encoder: ImageEvent -> Vec<u8> (borrow-only)
             let encode = |evt: ImageEvent| {
@@ -495,8 +498,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>>{
     ) = if let Some(ego_vehicle_sensor_radar_measurement_role) =
         args.ego_vehicle_sensor_radar_measurement_role
     {
-        let uuri =
-            UUri::try_from_parts("adas_compute", 0x0000_5a6b, 0x01, 0x0005).expect("Invalid UUri");
+        let uuri = uri_provider.get_resource_uri(RESOURCE_RADAR_SENSOR);
 
         // Encoder: RadarMeasurementEvent -> Vec<u8>
         let encode = |evt: RadarMeasurementEvent| {
@@ -544,8 +546,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>>{
     ) = if let Some(ego_vehicle_sensor_lidar_measurement_role) =
         args.ego_vehicle_sensor_lidar_measurement_role
     {
-        let uuri =
-            UUri::try_from_parts("adas_compute", 0x0000_5a6b, 0x01, 0x0006).expect("Invalid UUri"); // adjust last part if needed
+        let uuri = uri_provider.get_resource_uri(RESOURCE_LIDAR_SENSOR);
 
         // Encoder: LidarMeasurementEvent -> Vec<u8> (borrow-only)
         let encode = |evt: LidarMeasurementEvent|
