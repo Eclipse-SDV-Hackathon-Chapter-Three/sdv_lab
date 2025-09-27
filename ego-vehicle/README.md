@@ -1,22 +1,29 @@
 # EgoVehicle Controllers
 
-A collection of Rust-based ego vehicle controllers for CARLA simulation with different messaging protocols. This project provides two implementations for distributed vehicle control and monitoring in automotive software-defined vehicle (SDV) architectures.
+A collection of Rust-based ego vehicle controllers for CARLA simulation with different messaging protocols. This project provides three implementations for distributed vehicle control and monitoring in automotive software-defined vehicle (SDV) architectures.
 
-## Implementations
+## Contents
 
-### [uProtocol Controller](./uprotocol/)
+### [Container](./container/)
 
-- **Hybrid messaging**: uProtocol (automotive standard) + Zenoh for legacy support
-- **Automotive compliance**: Implements standardized automotive communication patterns
+- **Clean build environment**: Container environment that can be used to build software
+
+### [uProtocol Controller](./uprotocol-control/)
+
+- **Service Mesh Showcase**: Eclipse uProtocol (service mesh communication abstraction) + Eclipse Zenoh (for underlying protocol)
 - **Advanced integration**: Designed for modern software-defined vehicle architectures
 
-### [Zenoh Controller](./zenoh/)
+### [Zenoh Controller](./zenoh-control/)
 
 - **Traditional pub/sub**: Pure Zenoh messaging for distributed communication
-- **Lightweight**: Simpler implementation focused on core functionality
-- **Broad compatibility**: Works with existing Zenoh-based systems
+- **Compatibility**: Works with existing Zenoh-based systems
 
-## Common Features
+### [uProtocol Sensors](./uprotocol-sensors/)
+
+- **Service Mesh Showcase**: Eclipse uProtocol (service mesh communication abstraction) + Eclipse Zenoh (for underlying protocol)
+- **Advanced integration**: Designed for modern software-defined vehicle architectures
+
+## Common Features: uProtocol Controller & Zenoh Controller
 
 - **CARLA Integration**: Direct connection to CARLA simulator
 - **Dual Control Modes**: Manual control and autonomous cruise control
@@ -29,10 +36,10 @@ A collection of Rust-based ego vehicle controllers for CARLA simulation with dif
 2. **Choose your implementation**:
 
    ```bash
-   # For automotive-standard messaging
+   # For service mesh messaging on top of Zenoh
    cd uprotocol && cargo run --release
    
-   # For traditional pub/sub messaging  
+   # For Zenoh directly messaging  
    cd zenoh && cargo run --release
    ```
 

@@ -1,4 +1,0 @@
-target/
-Dockerfile
-enter_container.sh
-make_container.sh
