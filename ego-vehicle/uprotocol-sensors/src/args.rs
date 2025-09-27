@@ -9,17 +9,17 @@ pub struct Args {
     pub port: u16,
     #[clap(long, default_value = "ego_vehicle")]
     pub ego_vehicle_role: String,
-    #[clap(long, default_value = "ego_vehicle_sensor_lane_invasion")]
+    #[clap(long)]
     pub ego_vehicle_sensor_lane_invasion_role: Option<String>,
-    #[clap(long, default_value = "ego_vehicle_sensor_collision")]
+    #[clap(long)]
     pub ego_vehicle_sensor_collision_role: Option<String>,
-    #[clap(long, default_value = "ego_vehicle_sensor_obstacle_detection")]
+    #[clap(long)]
     pub ego_vehicle_sensor_obstacle_detection_role: Option<String>,
-    #[clap(long, default_value = "ego_vehicle_sensor_image")]
+    #[clap(long)]
     pub ego_vehicle_sensor_image_role: Option<String>,
-    #[clap(long, default_value = "ego_vehicle_sensor_radar_measurement")]
+    #[clap(long)]
     pub ego_vehicle_sensor_radar_measurement_role: Option<String>,
-    #[clap(long, default_value = "ego_vehicle_sensor_lidar_measurement")]
+    #[clap(long)]
     pub ego_vehicle_sensor_lidar_measurement_role: Option<String>,
     #[clap(long, default_value_t = 0.100)]
     pub delta: f64,
