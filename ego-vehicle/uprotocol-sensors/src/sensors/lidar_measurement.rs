@@ -2,9 +2,7 @@ use crate::helpers::ViewFactory;
 use crate::sensors::Listen;
 use carla::client::Sensor as CarlaSensor;
 use carla::sensor::SensorData;
-use carla::sensor::data::{
-    LidarMeasurement as LidarMeasurementEvent,
-};
+use carla::sensor::data::LidarMeasurement as LidarMeasurementEvent;
 
 /// Typed view over a CARLA Sensor that emits `LidarMeasurementEvent`.
 pub struct LidarMeasurement<'a>(pub &'a CarlaSensor);

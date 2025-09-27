@@ -15,46 +15,49 @@
 //
 
 use async_trait::async_trait;
-use up_transport_zenoh::zenoh_config;
 use carla::client::{ActorBase, Client};
 use carla::sensor::data::{
     CollisionEvent, Image as ImageEvent, LaneInvasionEvent,
     LidarMeasurement as LidarMeasurementEvent, ObstacleDetectionEvent,
     RadarMeasurement as RadarMeasurementEvent,
 };
+use carla_data_serde::{
+    CollisionEventSerDe, ImageEventSerBorrowed, LaneInvasionEventSerDe,
+    LidarMeasurementSerBorrowed, ObstacleDetectionEventSerDe, RadarMeasurementSerBorrowed,
+};
 use clap::Parser;
 use ego_vehicle::args::Args;
 use ego_vehicle::helpers::setup_sensor_with_transport;
 use ego_vehicle::sensors::{
-    CollisionFactory, ImageFactory,
-    LaneInvasionFactory, LidarMeasurementFactory,
-    ObstacleDetectionFactory,
-    RadarMeasurementFactory,
+    CollisionFactory, ImageFactory, LaneInvasionFactory, LidarMeasurementFactory,
+    ObstacleDetectionFactory, RadarMeasurementFactory,
 };
-use carla_data_serde::{CollisionEventSerDe, ImageEventSerBorrowed, LaneInvasionEventSerDe, 
-    LidarMeasurementSerBorrowed, ObstacleDetectionEventSerDe, RadarMeasurementSerBorrowed};
 use log;
 use serde_json;
+use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use up_rust::{StaticUriProvider, UPayloadFormat, UTransport, UUri, UListener, UMessage, UMessageBuilder, LocalUriProvider};
+use up_rust::{
+    LocalUriProvider, StaticUriProvider, UListener, UMessage, UMessageBuilder, UPayloadFormat,
+    UTransport, UUri,
+};
 use up_transport_zenoh::UPTransportZenoh;
+use up_transport_zenoh::zenoh_config;
 use zenoh::{Config, key_expr::KeyExpr};
-use std::str::FromStr;
 
 // General constants
 const CLIENT_TIME_MS: u64 = 5_000;
 const POLLING_EGO_MS: u64 = 1_000;
 const WAITING_PUB_MS: u64 = 1;
 // Vehicle control constants
-const MIN_THROTTLE: f32 =  0.0;
+const MIN_THROTTLE: f32 = 0.0;
 const MIN_STEERING: f32 = -1.0;
-const MIN_BRAKING:  f32 =  0.0;
+const MIN_BRAKING: f32 = 0.0;
 const MID_STEERING: f32 = 0.0;
 const MAX_THROTTLE: f32 = 1.0;
 const MAX_STEERING: f32 = 1.0;
-const MAX_BRAKING:  f32 = 1.0;
+const MAX_BRAKING: f32 = 1.0;
 
 // uProtocol resource IDs
 const RESOURCE_VELOCITY_STATUS: u16 = 0x8001;
@@ -72,7 +75,10 @@ pub(crate) fn get_zenoh_config() -> zenoh_config::Config {
     let args = Args::parse();
 
     let zenoh_string = if let Some(router) = &args.router {
-        format!("{{ mode: 'peer', connect: {{ endpoints: [ 'tcp/{}:7447' ] }} }}", router)
+        format!(
+            "{{ mode: 'peer', connect: {{ endpoints: [ 'tcp/{}:7447' ] }} }}",
+            router
+        )
     } else {
         "{ mode: 'peer' }".to_string()
     };
@@ -84,7 +90,7 @@ pub(crate) fn get_zenoh_config() -> zenoh_config::Config {
 
 // Listener for actuation command - implements the UListener trait for uProtocol
 struct ActuationListener {
-    data: Arc<Mutex<Option<String>>>,  // Shared data structure to store the latest actuation command
+    data: Arc<Mutex<Option<String>>>, // Shared data structure to store the latest actuation command
 }
 
 #[async_trait]
@@ -92,7 +98,8 @@ impl UListener for ActuationListener {
     async fn on_receive(&self, msg: UMessage) {
         if let Some(payload) = msg.payload {
             // Convert the binary payload to a string
-            let value = String::from_utf8(payload.to_vec()).unwrap_or_else(|_| "Invalid UTF-8".to_string());
+            let value =
+                String::from_utf8(payload.to_vec()).unwrap_or_else(|_| "Invalid UTF-8".to_string());
             log::trace!("[from_uprotocol] actuation_cmd : {}", value);
 
             // Update the shared data structure with the new value
@@ -106,7 +113,7 @@ impl UListener for ActuationListener {
 
 // Listener for engage status - implements the UListener trait for uProtocol
 struct EngageListener {
-    data: Arc<Mutex<Option<String>>>,  // Shared data structure to store the latest engage status
+    data: Arc<Mutex<Option<String>>>, // Shared data structure to store the latest engage status
 }
 
 #[async_trait]
@@ -114,7 +121,8 @@ impl UListener for EngageListener {
     async fn on_receive(&self, msg: UMessage) {
         if let Some(payload) = msg.payload {
             // Convert the binary payload to a string
-            let value = String::from_utf8(payload.to_vec()).unwrap_or_else(|_| "Invalid UTF-8".to_string());
+            let value =
+                String::from_utf8(payload.to_vec()).unwrap_or_else(|_| "Invalid UTF-8".to_string());
             log::trace!("[from_uprotocol] engage : {}", value);
 
             // Update the shared data structure with the new value
@@ -127,7 +135,7 @@ impl UListener for EngageListener {
 }
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>>{
+async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // -- Parse command line arguments --
     let args = Args::parse();
 
@@ -208,62 +216,85 @@ async fn main() -> Result<(), Box<dyn std::error::Error>>{
     // Create a uProtocol URI provider for this vehicle
     // This defines the identity of this node in the uProtocol network
     let uri_provider = StaticUriProvider::new("EGOVehicle", 0, 2);
-    
+
     // Create the uProtocol transport using Zenoh as the underlying transport
-    let transport: Arc<dyn UTransport> = 
-        Arc::new(
+    let transport: Arc<dyn UTransport> = Arc::new(
         UPTransportZenoh::builder(uri_provider.get_authority())
-        .expect("invalid authority name")
-        .with_config(get_zenoh_config())
-        .build()
-        .await?);
+            .expect("invalid authority name")
+            .with_config(get_zenoh_config())
+            .build()
+            .await?,
+    );
 
     // Create shared data structures for uProtocol subscribers
     // These will store the latest values received from uProtocol messages
     let actuation_cmd: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
     let engage: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(Some(0.to_string())));
-    
+
     // Register the actuation command listener with uProtocol
     // This listener will be called when messages matching the filter are received
     let actuation_filter = UUri::from_str("//CruiseControl/0/2/8001")?;
-    log::info!("Registering actuation command listener [filter: {}]", actuation_filter.to_uri(false));
-    transport.register_listener(
-        &actuation_filter,
-        None,
-        Arc::new(ActuationListener { data: actuation_cmd.clone() }),
-    ).await?;
-    
+    log::info!(
+        "Registering actuation command listener [filter: {}]",
+        actuation_filter.to_uri(false)
+    );
+    transport
+        .register_listener(
+            &actuation_filter,
+            None,
+            Arc::new(ActuationListener {
+                data: actuation_cmd.clone(),
+            }),
+        )
+        .await?;
+
     // Register the engage listener with uProtocol
     // This listener will be called when messages matching the filter are received
     let engage_filter = UUri::from_str("//AAOS/0/2/8002")?;
-    log::info!("Registering engage listener [filter: {}]", engage_filter.to_uri(false));
-    transport.register_listener(
-        &engage_filter,
-        None,
-        Arc::new(EngageListener { data: engage.clone() }),
-    ).await?;
-    
+    log::info!(
+        "Registering engage listener [filter: {}]",
+        engage_filter.to_uri(false)
+    );
+    transport
+        .register_listener(
+            &engage_filter,
+            None,
+            Arc::new(EngageListener {
+                data: engage.clone(),
+            }),
+        )
+        .await?;
+
     // Create topics for publishing uProtocol messages
     let clock_topic = uri_provider.get_resource_uri(RESOURCE_CLOCK_STATUS);
-    let velocity_topic = uri_provider.get_resource_uri(RESOURCE_VELOCITY_STATUS);   
-    
+    let velocity_topic = uri_provider.get_resource_uri(RESOURCE_VELOCITY_STATUS);
+
     // Set up Zenoh session for traditional Zenoh subscribers
     let zenoh_session = zenoh::open(get_zenoh_config()).await.unwrap();
 
     // Define Zenoh topics to subscribe to
-    let topic_throttle   = KeyExpr::new("vehicle/status/throttle_status").unwrap();
-    let topic_steering   = KeyExpr::new("vehicle/status/steering_status").unwrap();
-    let topic_braking    = KeyExpr::new("vehicle/status/braking_status").unwrap();
+    let topic_throttle = KeyExpr::new("vehicle/status/throttle_status").unwrap();
+    let topic_steering = KeyExpr::new("vehicle/status/steering_status").unwrap();
+    let topic_braking = KeyExpr::new("vehicle/status/braking_status").unwrap();
 
     // Create Zenoh subscribers
     log::info!("Declaring Subscriber on '{}'...", &topic_throttle);
-    let mut _subscriber_throttle = zenoh_session.declare_subscriber(&topic_throttle).await.unwrap();
+    let mut _subscriber_throttle = zenoh_session
+        .declare_subscriber(&topic_throttle)
+        .await
+        .unwrap();
 
     log::info!("Declaring Subscriber on '{}'...", &topic_steering);
-    let mut _subscriber_steering = zenoh_session.declare_subscriber(&topic_steering).await.unwrap();
+    let mut _subscriber_steering = zenoh_session
+        .declare_subscriber(&topic_steering)
+        .await
+        .unwrap();
 
     log::info!("Declaring Subscriber on '{}'...", &topic_braking);
-    let mut _subscriber_braking = zenoh_session.declare_subscriber(&topic_braking).await.unwrap();
+    let mut _subscriber_braking = zenoh_session
+        .declare_subscriber(&topic_braking)
+        .await
+        .unwrap();
 
     // Create shared data structures for Zenoh subscribers
     let throttle_sts: Arc<Mutex<Option<String>>> = Arc::new(Mutex::new(None));
@@ -453,7 +484,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>>{
     // -- Set up Sensor for Image -- (generic)
     let (_image_comms, _ego_vehicle_sensor_image_id, _image_sensor_keepalive) =
         if let Some(ego_vehicle_sensor_image_role) = args.ego_vehicle_sensor_image_role {
-        let uuri = uri_provider.get_resource_uri(RESOURCE_IMAGE_SENSOR);
+            let uuri = uri_provider.get_resource_uri(RESOURCE_IMAGE_SENSOR);
 
             // Encoder: ImageEvent -> Vec<u8> (borrow-only)
             let encode = |evt: ImageEvent| {
@@ -608,7 +639,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>>{
         // Publish clock status via uProtocol
         let clock_payload = format!("{}", timestamp.elapsed_seconds);
         log::debug!("[to_uprotocol] clock_status : {}", clock_payload);
-        
+
         let clock_message = UMessageBuilder::publish(clock_topic.clone())
             .build_with_payload(clock_payload.clone(), UPayloadFormat::UPAYLOAD_FORMAT_TEXT)?;
         transport.send(clock_message).await?;
@@ -625,7 +656,10 @@ async fn main() -> Result<(), Box<dyn std::error::Error>>{
                 // Publish velocity via uProtocol
                 log::debug!("[to_uprotocol] velocity_status : {}", velocity_payload);
                 let velocity_message = UMessageBuilder::publish(velocity_topic.clone())
-                    .build_with_payload(velocity_payload.clone(), UPayloadFormat::UPAYLOAD_FORMAT_TEXT)?;
+                    .build_with_payload(
+                        velocity_payload.clone(),
+                        UPayloadFormat::UPAYLOAD_FORMAT_TEXT,
+                    )?;
                 transport.send(velocity_message).await?;
 
                 // Initialize control values
@@ -649,9 +683,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>>{
                 let engage_mode = {
                     let data_engage = engage.lock().unwrap();
                     if let Some(ref payload) = *data_engage {
-                        payload.to_lowercase() != "0"  // true for automatic mode, false for manual
+                        payload.to_lowercase() != "0" // true for automatic mode, false for manual
                     } else {
-                        false  // default to manual mode
+                        false // default to manual mode
                     }
                 };
 
@@ -680,8 +714,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>>{
                     // Automatic mode - use PID output from actuation command
                     // Prioritize uProtocol actuation command
                     let mut pid_output: f32 = 0.0;
-                    
-                    { // scope blocking to release lock after checking the value
+
+                    {
+                        // scope blocking to release lock after checking the value
                         let data_actuation_cmd = actuation_cmd.lock().unwrap();
                         if let Some(ref payload) = *data_actuation_cmd {
                             if let Ok(val) = payload.parse::<f32>() {
@@ -706,10 +741,12 @@ async fn main() -> Result<(), Box<dyn std::error::Error>>{
                 control.steer = steer;
                 control.brake = brake;
 
-                log::debug!("[to_carla] throttle={}, steer={}, brake={}",
+                log::debug!(
+                    "[to_carla] throttle={}, steer={}, brake={}",
                     control.throttle,
                     control.steer,
-                    control.brake);
+                    control.brake
+                );
 
                 ego_vehicle.apply_control(&control);
             } else {

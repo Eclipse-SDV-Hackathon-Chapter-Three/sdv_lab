@@ -2,7 +2,7 @@ use crate::helpers::ViewFactory;
 use crate::sensors::Listen;
 use carla::client::Sensor as CarlaSensor;
 use carla::sensor::SensorData;
-use carla::sensor::data::{Image as ImageEvent};
+use carla::sensor::data::Image as ImageEvent;
 
 /// Typed view over a CARLA Sensor that emits `ImageEvent`.
 pub struct Image<'a>(pub &'a CarlaSensor);
