@@ -1067,7 +1067,7 @@ class IMUSensor(object):
 
 
 class RadarSensor(object):
-    def __init__(self, parent_actor):
+    def __init__(self, parent_actor, name="front_radar"):
         self.sensor = None
         self._parent = parent_actor
         bound_x = 0.5 + self._parent.bounding_box.extent.x
@@ -1078,6 +1078,8 @@ class RadarSensor(object):
         world = self._parent.get_world()
         self.debug = world.debug
         bp = world.get_blueprint_library().find('sensor.other.radar')
+        if bp.has_attribute('role_name'):
+            bp.set_attribute('role_name', name)
         bp.set_attribute('horizontal_fov', str(35))
         bp.set_attribute('vertical_fov', str(20))
         self.sensor = world.spawn_actor(
