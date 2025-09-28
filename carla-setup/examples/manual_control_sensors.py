@@ -289,6 +289,7 @@ class World(object):
         # Set up the sensors.
         self.collision_sensor = CollisionSensor(self.player, self.hud)
         self.lane_invasion_sensor = LaneInvasionSensor(self.player, self.hud)
+        self.obstacle_detection_sensor = ObstacleDetectionSensor(self.player, self.hud)
         self.gnss_sensor = GnssSensor(self.player)
         self.imu_sensor = IMUSensor(self.player)
         self.camera_manager = CameraManager(self.player, self.hud, self._gamma)
@@ -359,6 +360,7 @@ class World(object):
             self.camera_manager.sensor,
             self.collision_sensor.sensor,
             self.lane_invasion_sensor.sensor,
+            self.obstacle_detection_sensor.sensor,
             self.gnss_sensor.sensor,
             self.imu_sensor.sensor]
         for sensor in sensors:
@@ -992,6 +994,120 @@ class LaneInvasionSensor(object):
         lane_types = set(x.type for x in event.crossed_lane_markings)
         text = ['%r' % str(x).split()[-1] for x in lane_types]
         self.hud.notification('Crossed line %s' % ' and '.join(text))
+
+
+# ==============================================================================
+# -- ObstacleDetectionSensor ---------------------------------------------------
+# ==============================================================================
+
+class ObstacleDetectionSensor(object):
+    """
+    A lightweight obstacle detector helper mirroring the style of CollisionSensor.
+    Spawns `sensor.other.obstacle`, listens for ObstacleDetectionEvent, updates HUD,
+    and keeps a small rolling history.
+
+    History items are tuples: (frame, distance_m, other_actor_id, other_actor_type)
+    """
+
+    def __init__(self, parent_actor, hud, name="obstacle_detection_1",
+                 distance=12.0, hit_radius=0.6, only_dynamics=False,
+                 debug_linetrace=False, attach_transform=None, history_len=4000):
+        import weakref
+        import collections
+
+        self.sensor = None
+        self.history = []
+        self._parent = parent_actor
+        self.hud = hud
+        self.history_len = max(1, int(history_len))
+        self.total_detections = 0
+
+        # Expose a simple counter on the HUD object so it can be rendered if desired.
+        # (Safe even if HUD doesn't explicitly define it.)
+        if not hasattr(self.hud, "obstacles_detected"):
+            self.hud.obstacles_detected = 0
+
+        world = self._parent.get_world()
+        bp = world.get_blueprint_library().find('sensor.other.obstacle')
+        if bp.has_attribute('role_name'):
+            bp.set_attribute('role_name', name)
+
+        # Configure the obstacle sensor according to CARLA 0.9.15 docs.
+        # distance: how far ahead to trace (meters)
+        # hit_radius: radius of the capsule trace (meters)
+        # only_dynamics: True -> ignore static props
+        # debug_linetrace: visualize the trace
+        if bp.has_attribute('distance'):
+            bp.set_attribute('distance', str(float(distance)))
+        if bp.has_attribute('hit_radius'):
+            bp.set_attribute('hit_radius', str(float(hit_radius)))
+        if bp.has_attribute('only_dynamics'):
+            bp.set_attribute('only_dynamics', 'true' if only_dynamics else 'false')
+        if bp.has_attribute('debug_linetrace'):
+            bp.set_attribute('debug_linetrace', 'true' if debug_linetrace else 'false')
+
+        # Mount slightly forward by default so the capsule starts at the bumper.
+        if attach_transform is None:
+            try:
+                attach_transform = carla.Transform(carla.Location(x=2.0, z=1.0))
+            except NameError:
+                # If carla not imported in this file, just default to identity;
+                # the caller file likely has already imported carla.
+                attach_transform = None
+
+        self.sensor = world.spawn_actor(
+            bp,
+            attach_transform if attach_transform is not None else carla.Transform(),
+            attach_to=self._parent
+        )
+
+        # Avoid circular reference by using a weakref in the callback
+        weak_self = weakref.ref(self)
+        self.sensor.listen(lambda event: ObstacleDetectionSensor._on_obstacle(weak_self, event))
+
+    def destroy(self):
+        if self.sensor is not None and self.sensor.is_alive:
+            self.sensor.stop()
+            self.sensor.destroy()
+            self.sensor = None
+
+    def get_obstacle_history(self):
+        """
+        Returns a list of (frame, distance_m, other_actor_id, other_actor_type).
+        """
+        return list(self.history)
+
+    def get_total_detections(self):
+        return int(self.total_detections)
+
+    @staticmethod
+    def _on_obstacle(weak_self, event):
+        import math
+        self = weak_self()
+        if not self:
+            return
+
+        # event.other_actor and event.distance exist per CARLA docs
+        other = event.other_actor
+        dist = float(getattr(event, "distance", float("nan")))
+        actor_type = get_actor_display_name(other) if other else "Unknown"
+
+        # Update HUD
+        self.total_detections += 1
+        # Keep a mirror on hud for easy rendering in overlays
+        self.hud.obstacles_detected = self.total_detections
+
+        # Notify (short, actionable)
+        if not math.isnan(dist):
+            self.hud.notification(f'Obstacle: {actor_type} at {dist:.1f} m (total: {self.total_detections})')
+        else:
+            self.hud.notification(f'Obstacle: {actor_type} (total: {self.total_detections})')
+
+        # Store compact history record
+        other_id = other.id if other else -1
+        self.history.append((event.frame, dist, other_id, actor_type))
+        if len(self.history) > self.history_len:
+            self.history.pop(0)
 
 
 # ==============================================================================
