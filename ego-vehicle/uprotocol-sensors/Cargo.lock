@@ -450,7 +450,7 @@ dependencies = [
 [[package]]
 name = "carla-data-serde"
 version = "0.1.0"
-source = "git+ssh://git@github.com/Eclipse-SDV-Hackathon-Chapter-Three/carla-data-serde.git?branch=main#5f76545a527d8934cc07f1301cfa1593ea711769"
+source = "git+ssh://git@github.com/Eclipse-SDV-Hackathon-Chapter-Three/carla-data-serde.git?branch=main#8ee282e6cb120dc27bef6ff5429c75eb1b04785b"
 dependencies = [
  "carla",
  "nalgebra",

@@ -1144,7 +1144,7 @@ class GnssSensor(object):
 
 
 class IMUSensor(object):
-    def __init__(self, parent_actor):
+    def __init__(self, parent_actor, name="ego_imu"):
         self.sensor = None
         self._parent = parent_actor
         self.accelerometer = (0.0, 0.0, 0.0)
@@ -1152,6 +1152,8 @@ class IMUSensor(object):
         self.compass = 0.0
         world = self._parent.get_world()
         bp = world.get_blueprint_library().find('sensor.other.imu')
+        if bp.has_attribute('role_name'):
+            bp.set_attribute('role_name', name)
         self.sensor = world.spawn_actor(
             bp, carla.Transform(), attach_to=self._parent)
         # We need to pass the lambda a weak reference to self to avoid circular

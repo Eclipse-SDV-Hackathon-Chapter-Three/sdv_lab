@@ -17,20 +17,20 @@
 use async_trait::async_trait;
 use carla::client::{ActorBase, Client};
 use carla::sensor::data::{
-    CollisionEvent, Image as ImageEvent, LaneInvasionEvent,
+    CollisionEvent, Image as ImageEvent, ImuMeasurement as ImuMeasurementEvent, LaneInvasionEvent,
     LidarMeasurement as LidarMeasurementEvent, ObstacleDetectionEvent,
     RadarMeasurement as RadarMeasurementEvent,
 };
 use carla_data_serde::{
-    CollisionEventSerDe, ImageEventSerBorrowed, LaneInvasionEventSerDe,
+    CollisionEventSerDe, ImageEventSerBorrowed, ImuMeasurementSerDe, LaneInvasionEventSerDe,
     LidarMeasurementSerBorrowed, ObstacleDetectionEventSerDe, RadarMeasurementSerBorrowed,
 };
 use clap::Parser;
 use ego_vehicle::args::Args;
 use ego_vehicle::helpers::setup_sensor_with_transport;
 use ego_vehicle::sensors::{
-    CollisionFactory, ImageFactory, LaneInvasionFactory, LidarMeasurementFactory,
-    ObstacleDetectionFactory, RadarMeasurementFactory,
+    CollisionFactory, ImageFactory, ImuMeasurementFactory, LaneInvasionFactory,
+    LidarMeasurementFactory, ObstacleDetectionFactory, RadarMeasurementFactory,
 };
 use log;
 use serde_json;
@@ -69,6 +69,7 @@ const RESOURCE_OBSTACLE_DETECTION_SENSOR: u16 = 0x8012;
 const RESOURCE_IMAGE_SENSOR: u16 = 0x8013;
 const RESOURCE_RADAR_SENSOR: u16 = 0x8014;
 const RESOURCE_LIDAR_SENSOR: u16 = 0x8015;
+const RESOURCE_IMU_SENSOR: u16 = 0x8016;
 
 // Helper function to create a Zenoh configuration
 pub(crate) fn get_zenoh_config() -> zenoh_config::Config {
@@ -613,6 +614,49 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             Some(_lidar_measurement_comms),
             Some(_ego_vehicle_sensor_lidar_measurement_id),
             Some(_lidar_measurement_sensor_keepalive),
+        )
+    } else {
+        (None, None, None)
+    };
+
+    // -- Set up Sensor for ImuMeasurement -- (generic)
+    let (
+        _imu_measurement_comms,
+        _ego_vehicle_sensor_imu_measurement_id,
+        _imu_measurement_sensor_keepalive,
+    ) = if let Some(ego_vehicle_sensor_imu_measurement_role) =
+        args.ego_vehicle_sensor_imu_measurement_role
+    {
+        let uuri = uri_provider.get_resource_uri(RESOURCE_IMU_SENSOR);
+
+        // Encoder: ImuMeasurementEvent -> Vec<u8> (borrow-only)
+        let encode = |evt: ImuMeasurementEvent| {
+            let serde_evt: ImuMeasurementSerDe = evt.into();
+            serde_json::to_vec(&serde_evt).map_err(|e| e.into())
+        };
+
+        let (_imu_measurement_comms, imu_measurement_actor_id, _imu_measurement_sensor_keepalive) =
+            setup_sensor_with_transport(
+                &carla_world,
+                &running,
+                &ego_vehicle_sensor_imu_measurement_role,
+                "imu_measurement_sensor",
+                POLLING_EGO_MS,
+                ImuMeasurementFactory,
+                uuri,
+                encode,
+                UPayloadFormat::UPAYLOAD_FORMAT_JSON,
+                Arc::clone(&transport),
+            )
+            .await
+            .expect("Unable to set up imu measurement sensor with transport");
+
+        let _ego_vehicle_sensor_imu_measurement_id = Some(imu_measurement_actor_id);
+
+        (
+            Some(_imu_measurement_comms),
+            Some(_ego_vehicle_sensor_imu_measurement_id),
+            Some(_imu_measurement_sensor_keepalive),
         )
     } else {
         (None, None, None)

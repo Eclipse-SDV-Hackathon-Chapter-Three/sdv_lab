@@ -21,6 +21,8 @@ pub struct Args {
     pub ego_vehicle_sensor_radar_measurement_role: Option<String>,
     #[clap(long)]
     pub ego_vehicle_sensor_lidar_measurement_role: Option<String>,
+    #[clap(long)]
+    pub ego_vehicle_sensor_imu_measurement_role: Option<String>,
     #[clap(long, default_value_t = 0.100)]
     pub delta: f64,
     #[clap(long, default_value = None)]

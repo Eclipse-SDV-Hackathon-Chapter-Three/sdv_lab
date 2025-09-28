@@ -1,12 +1,12 @@
 use crate::sensors::{Listen, SensorComms};
 use carla::client::{ActorBase, Sensor, World};
+use log;
 use std::error::Error;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tokio::time::sleep;
 use up_rust::{UMessageBuilder, UPayloadFormat, UTransport, UUri};
-use log;
 
 type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
 

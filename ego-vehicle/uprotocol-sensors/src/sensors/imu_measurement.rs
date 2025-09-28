@@ -2,13 +2,13 @@ use crate::helpers::ViewFactory;
 use crate::sensors::Listen;
 use carla::client::Sensor as CarlaSensor;
 use carla::sensor::SensorData;
-use carla::sensor::data::{Image as ImageEvent};
+use carla::sensor::data::ImuMeasurement as ImuMeasurementEvent;
 
-/// Typed view over a CARLA Sensor that emits `ImageEvent`.
-pub struct Image<'a>(pub &'a CarlaSensor);
+/// Typed view over a CARLA Sensor that emits `ImuMeasurement`.
+pub struct ImuMeasurement<'a>(pub &'a CarlaSensor);
 
-impl<'a> Listen for Image<'a> {
-    type Data = ImageEvent;
+impl<'a> Listen for ImuMeasurement<'a> {
+    type Data = ImuMeasurementEvent;
 
     fn listen<F>(&self, f: F)
     where
@@ -20,17 +20,17 @@ impl<'a> Listen for Image<'a> {
             if let Ok(evt) = data.try_into() {
                 f(evt);
             } else {
-                log::warn!("Received non ImageEvent");
+                log::warn!("Received non ImuMeasurement");
             }
         });
     }
 }
 
-pub struct ImageFactory;
+pub struct ImuMeasurementFactory;
 
-impl ViewFactory for ImageFactory {
-    type View<'a> = Image<'a>;
+impl ViewFactory for ImuMeasurementFactory {
+    type View<'a> = ImuMeasurement<'a>;
     fn make<'a>(&self, s: &'a CarlaSensor) -> Self::View<'a> {
-        Image(s)
+        ImuMeasurement(s)
     }
 }
