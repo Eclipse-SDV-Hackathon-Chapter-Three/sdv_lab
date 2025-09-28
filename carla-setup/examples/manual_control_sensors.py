@@ -1164,42 +1164,46 @@ class CameraManager(object):
 
         self.transform_index = 1
         self.sensors = [
-            ['sensor.camera.rgb', cc.Raw, 'Camera RGB', {}],
-            ['sensor.camera.depth', cc.Raw, 'Camera Depth (Raw)', {}],
-            ['sensor.camera.depth', cc.Depth, 'Camera Depth (Gray Scale)', {}],
-            ['sensor.camera.depth', cc.LogarithmicDepth, 'Camera Depth (Logarithmic Gray Scale)', {}],
-            ['sensor.camera.semantic_segmentation', cc.Raw, 'Camera Semantic Segmentation (Raw)', {}],
-            ['sensor.camera.semantic_segmentation', cc.CityScapesPalette, 'Camera Semantic Segmentation (CityScapes Palette)', {}],
-            ['sensor.camera.instance_segmentation', cc.CityScapesPalette, 'Camera Instance Segmentation (CityScapes Palette)', {}],
-            ['sensor.camera.instance_segmentation', cc.Raw, 'Camera Instance Segmentation (Raw)', {}],
-            ['sensor.lidar.ray_cast', None, 'Lidar (Ray-Cast)', {'range': '50'}],
-            ['sensor.camera.dvs', cc.Raw, 'Dynamic Vision Sensor', {}],
-            ['sensor.camera.rgb', cc.Raw, 'Camera RGB Distorted',
-                {'lens_circle_multiplier': '3.0',
-                'lens_circle_falloff': '3.0',
-                'chromatic_aberration_intensity': '0.5',
-                'chromatic_aberration_offset': '0'}],
-            ['sensor.camera.optical_flow', cc.Raw, 'Optical Flow', {}],
-            ['sensor.camera.normals', cc.Raw, 'Camera Normals', {}],
+            ['sensor.camera.rgb',                   cc.Raw, 'Camera RGB',                                'front_camera',{}],
+            ['sensor.camera.depth',                 cc.Raw, 'Camera Depth (Raw)',                        'depth_front', {}],
+            ['sensor.camera.depth',                 cc.Depth, 'Camera Depth (Gray Scale)',               'depth_front', {}],
+            ['sensor.camera.depth',                 cc.LogarithmicDepth, 'Camera Depth (Log Gray Scale)','depth_front', {}],
+            ['sensor.camera.semantic_segmentation', cc.Raw, 'Camera Semantic (Raw)',                     'sem_front',   {}],
+            ['sensor.camera.semantic_segmentation', cc.CityScapesPalette, 'Camera Semantic (CityScapes)','sem_front',   {}],
+            ['sensor.camera.instance_segmentation', cc.CityScapesPalette, 'Instance Seg (CityScapes)',   'inst_front',  {}],
+            ['sensor.camera.instance_segmentation', cc.Raw, 'Instance Seg (Raw)',                        'inst_front',  {}],
+            ['sensor.lidar.ray_cast',               None,   'Lidar (Ray-Cast)',                          'roof_lidar',  {'range':'50'}],
+            ['sensor.camera.dvs',                   cc.Raw, 'Dynamic Vision Sensor',                     'dvs_front',   {}],
+            ['sensor.camera.rgb',                   cc.Raw, 'Camera RGB Distorted',                      'rgb_front2',  {
+                'lens_circle_multiplier':'3.0',
+                'lens_circle_falloff':'3.0',
+                'chromatic_aberration_intensity':'0.5',
+                'chromatic_aberration_offset':'0'
+            }],
+            ['sensor.camera.optical_flow',          cc.Raw, 'Optical Flow',                              'flow_front',  {}],
+            ['sensor.camera.normals',               cc.Raw, 'Camera Normals',                            'norm_front',  {}],
         ]
         world = self._parent.get_world()
         bp_library = world.get_blueprint_library()
         for item in self.sensors:
             bp = bp_library.find(item[0])
+            if bp.has_attribute('role_name'):
+                bp.set_attribute('role_name', item[3])
+
+            attrs = item[4] if len(item) > 4 else {}
             if item[0].startswith('sensor.camera'):
                 bp.set_attribute('image_size_x', str(hud.dim[0]))
                 bp.set_attribute('image_size_y', str(hud.dim[1]))
                 if bp.has_attribute('gamma'):
                     bp.set_attribute('gamma', str(gamma_correction))
-                for attr_name, attr_value in item[3].items():
-                    bp.set_attribute(attr_name, attr_value)
+                for k, v in attrs.items():
+                    bp.set_attribute(k, v)
             elif item[0].startswith('sensor.lidar'):
                 self.lidar_range = 50
-
-                for attr_name, attr_value in item[3].items():
-                    bp.set_attribute(attr_name, attr_value)
-                    if attr_name == 'range':
-                        self.lidar_range = float(attr_value)
+                for k, v in attrs.items():
+                    bp.set_attribute(k, v)
+                    if k == 'range':
+                        self.lidar_range = float(v)
 
             item.append(bp)
         self.index = None
