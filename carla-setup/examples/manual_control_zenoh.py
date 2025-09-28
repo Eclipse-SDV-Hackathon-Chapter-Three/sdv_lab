@@ -626,7 +626,9 @@ class KeyboardControl(object):
                     self._lights = current_lights
                     world.player.set_light_state(carla.VehicleLightState(self._lights))
                 # Apply control
-                if self._ackermann_enabled:
+                if not self._ackermann_enabled:
+                    world.player.apply_control(self._control)
+                else:
                     world.player.apply_ackermann_control(self._ackermann_control)
                     # Update control to the last one applied by the ackermann controller.
                     self._control = world.player.get_control()
