@@ -3,6 +3,7 @@ use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, Mutex};
 use std::thread::ThreadId;
 use std::thread::{self, JoinHandle};
+use log;
 
 pub trait Listen {
     type Data: Send + 'static;
@@ -87,6 +88,8 @@ impl SensorComms {
         let handler = Arc::new(handler);
 
         sensor.listen({
+            log::info!("Received data in CARLA listen callback for: {}", self._name);
+
             let handler = Arc::clone(&handler);
             let rt = rt.clone();
             move |data: S::Data| {

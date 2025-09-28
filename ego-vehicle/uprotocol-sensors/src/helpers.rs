@@ -6,6 +6,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use tokio::time::sleep;
 use up_rust::{UMessageBuilder, UPayloadFormat, UTransport, UUri};
+use log;
 
 type Result<T> = std::result::Result<T, Box<dyn Error + Send + Sync>>;
 
@@ -91,6 +92,7 @@ where
     let uuri_shared = uuri.clone();
     let encode = Arc::new(encode);
     let transport = Arc::clone(&transport);
+    let role_name: String = role_name.to_owned();
 
     // 5) Build typed view borrowing `sensor` (no clone!)
     {
@@ -101,12 +103,13 @@ where
             let uuri = uuri_shared.clone();
             let encode = Arc::clone(&encode);
             let transport = Arc::clone(&transport);
+            let role_name = role_name.clone();
 
             async move {
                 let payload = match encode(evt) {
                     Ok(b) => b,
                     Err(e) => {
-                        log::error!("Event encoding failed: {e}");
+                        log::error!("Event encoding failed for {role_name}: {e}");
                         return;
                     }
                 };
@@ -116,13 +119,15 @@ where
                 {
                     Ok(m) => m,
                     Err(e) => {
-                        log::error!("UMessage build failed: {e}");
+                        log::error!("UMessage build failed for {role_name}: {e}");
                         return;
                     }
                 };
 
                 if let Err(err) = transport.send(umsg).await {
-                    log::error!("Transport send failed: {:?}", err);
+                    log::error!("Transport send failed for {role_name}: {:?}", err);
+                } else {
+                    log::info!("Transport send succeeded for {role_name}.");
                 }
             }
         });
