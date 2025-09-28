@@ -63,6 +63,7 @@ cargo run --release -- [OPTIONS]
 - `--ego_vehicle_sensor_image_role front_camera` (default: None, so no sensor)
 - `--ego_vehicle_sensor_radar_measurement_role front_radar` (default: None, so no sensor)
 - `--ego_vehicle_sensor_lidar_measurement_role roof_lidar` (default: None, so no sensor)
+- `--ego_vehicle_sensor_imu_measurement_role ego_imu` (default: None, so no sensor)
 
 ### Basic Usage
 
@@ -160,6 +161,7 @@ If you'd like to test data flow from CARLA Server => `ego-vehicle/uprotocol-sens
   - Image: `0x8013`
   - RadarMeasurement: `0x8014`
   - LidarMeasurement: `0x8015`
+  - ImuMeasurement: `0x8016`
 
 ### Message Flow
 
