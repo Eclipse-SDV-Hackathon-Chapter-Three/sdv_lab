@@ -16,9 +16,10 @@ bridge_examples := source_directory() + "/../" + examples
 vehicle_bp      := "vehicle.audi.etron"
 vehicle_role    := "ego_vehicle"
 
-example_auto    := "automatic_control_zenoh.py"
-example_manual  := "manual_control_zenoh.py"
-zenoh_vehicle   := "zenoh_vehicle.py"
+example_auto            := "automatic_control_zenoh.py"
+example_manual          := "manual_control_zenoh.py"
+example_manual_sensors  := "manual_control_sensors.py"
+zenoh_vehicle           := "zenoh_vehicle.py"
 
 # Clone a specific version of the CARLA Python API
 _clone_carla_api: (_check_host client_host)
@@ -55,6 +56,21 @@ run-manual router="127.0.0.1" host="127.0.0.1" port="2000": (_check_host client_
   @cp -vf {{ bridge_examples }}/{{ example_manual }} {{ python_examples }}
   # Run client
   python3 {{ python_examples }}/{{ example_manual }} \
+    --host {{ host }} \
+    --port {{ port }} \
+    --res {{ client_width }}x{{ client_height }} \
+    --filter "{{ vehicle_bp }}" \
+    --rolename '{{ vehicle_role }}' \
+    --router {{ router }}
+
+[group('Carla Client')]
+[doc('Run manual control with Sensors')]
+run-manual-sensors router="127.0.0.1" host="127.0.0.1" port="2000": (_check_host client_host)
+  # Copy scripts
+  @cp -vf {{ bridge_examples }}/{{ zenoh_vehicle }} {{ python_examples }}
+  @cp -vf {{ bridge_examples }}/{{ example_manual_sensors }} {{ python_examples }}
+  # Run client
+  python3 {{ python_examples }}/{{ example_manual_sensors }} \
     --host {{ host }} \
     --port {{ port }} \
     --res {{ client_width }}x{{ client_height }} \
