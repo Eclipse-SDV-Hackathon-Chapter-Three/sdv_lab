@@ -1,6 +1,8 @@
-# EgoVehicle uProtocol Controller
+# EgoVehicle uProtocol Sensors (+ Controller)
 
 A Rust-based ego vehicle controller for CARLA simulation that uses uProtocol-over-Zenoh for distributed communication. This hybrid application bridges CARLA's vehicle simulation with a service mesh (uProtocol) operating over a protocol (Zenoh), enabling remote vehicle control and status monitoring in automotive software-defined vehicle architectures.
+
+uProtocol-over-Zenoh is also used to forward the sensor data from CARLA over to an application you will write which operates with this data to create an Advanced Driver Assistance System (ADAS) / Automated Driving (AD) feature.
 
 ## Features
 
@@ -36,7 +38,6 @@ A Rust-based ego vehicle controller for CARLA simulation that uses uProtocol-ove
 
 - CARLA simulator running
 - Rust toolchain installed
-- Rust API (crate) built locally (refer to [CARLA Build](./../../carla-setup/README.md#carla-build) section at carla-setup/README.md)
 - Zenoh router (optional, for distributed setup)
 - uProtocol-compatible systems for integration
 
@@ -54,6 +55,15 @@ cargo run --release -- [OPTIONS]
 - `--delta <DELTA>`: Fixed delta seconds for simulation (default: 0.100)
 - `--router <ROUTER>`: Zenoh router address for distributed mode (optional)
 
+**Sensor Options**
+
+- `--ego_vehicle_sensor_lane_invasion_role lane_invasion_1` (default: None, so no sensor)
+- `--ego_vehicle_sensor_collision_role collision_1` (default: None, so no sensor)
+- `--ego_vehicle_sensor_obstacle_detection_role obstacle_detection_1` (default: None, so no sensor)
+- `--ego_vehicle_sensor_image_role front_camera` (default: None, so no sensor)
+- `--ego_vehicle_sensor_radar_measurement_role front_radar` (default: None, so no sensor)
+- `--ego_vehicle_sensor_lidar_measurement_role roof_lidar` (default: None, so no sensor)
+
 ### Basic Usage
 
 1. **Start CARLA simulator**
@@ -61,15 +71,62 @@ cargo run --release -- [OPTIONS]
 3. **Run the controller**:
 
    ```bash
-   # Local mode (peer-to-peer)
+   # Local mode (peer-to-peer); no sensors
    cargo run --release
-   
-   # With custom CARLA settings
-   cargo run --release -- --host 192.168.1.100 --port 2000 --role my_vehicle
-   
-   # With Zenoh router
-   cargo run --release -- --router 192.168.1.200
+
+   # Local mode (peer-to-peer); add some sensors
+   cargo run --release -- --ego_vehicle_sensor_lane_invasion_role lane_invasion_1 --ego_vehicle_sensor_image_role front_camera
    ```
+
+### Detailed Example Usage
+
+#### Terminal 1:
+
+```shell
+# navigate to carla-setup folder
+# start the CARLA Server
+just server-nvidia
+```
+
+#### Terminal 2:
+
+```shell
+# navigate to carla-setup folder
+# start the CARLA Client configured with sensors
+just manual-control-sensors
+```
+
+You should see a pygame window open showing the ego vehicle.
+
+#### Terminal 3:
+
+```shell
+# start the the ego-vehicle proxy to collect sensors
+cargo run --release -- --ego_vehicle_sensor_lane_invasion_role lane_invasion_1 --ego_vehicle_sensor_image_role front_camera
+```
+
+You should see the sensors configured be found and begin to publish in the terminal.
+
+#### Terminal 4:
+
+```shell
+# navigate to ego-vehicle-sensor-mock folder
+# start the ego-vehicle-sensor-subscriber to sanity check data is flowing
+cargo run --bin ego-vehicle-sensor-mock -- ./sensor-uprotocol-configs.json5
+```
+
+You should any active sensors' data flow through in the terminal, usually in abbreviated form (e.g. not all camera pixels are logged).
+
+### Adjusting CARLA Simulation and uprotocol-sensors for Different Sensor Configurations
+
+While there are an array of sensors already configured, you may wish to, for example, a rear facing cameras or put another lidar sensor at a different angle.
+
+Making these sorts of modifications is possible by investigating and modifying these files:
+- `sdv_lab/carla-setup/examples/manual_control_sensors.py`
+- `sdv_lab/ego-vehicle/uprotocol-sensor/src/main.rs`
+
+If you'd like to test data flow from CARLA Server => `ego-vehicle/uprotocol-sensor` => `ego-vehicle-sensor-subscriber` for additional sensors or if you change the `role_name` from the default, you'll also need to modify:
+- `ego-vehicle-sensor-mock/sensor-uprotocol-configs.json5` at a minimum
 
 ### Control Modes
 
@@ -97,12 +154,19 @@ cargo run --release -- [OPTIONS]
 - **Resource IDs**:
   - Velocity Status: `0x8001`
   - Clock Status: `0x8002`
+  - LaneInvasionEvent: `0x8010`
+  - CollisionEvent: `0x8011`
+  - ObstacleDetectionEvent: `0x8012`
+  - Image: `0x8013`
+  - RadarMeasurement: `0x8014`
+  - LidarMeasurement: `0x8015`
 
 ### Message Flow
 
 1. **Incoming Commands**: Received via uProtocol listeners with automatic deserialization
 2. **Status Publishing**: Vehicle state published as uProtocol messages with proper formatting
 3. **Legacy Support**: Manual control inputs still supported via traditional Zenoh topics
+4. **Outgoing Sensor Data**: Configured sensors are listened for over CARLA APIs and then forwarded via uProtocol-over-Zenoh
 
 ## Configuration
 
@@ -146,12 +210,14 @@ The application follows a hybrid event-driven architecture with four main compon
 - Manages world synchronization and actor discovery
 - Applies vehicle control commands
 - Retrieves vehicle state information
+- Retrieves configured sensor information
 
 ### 2. uProtocol Communication Layer
 
 - Implements automotive-standard messaging patterns
 - Handles structured message serialization/deserialization
 - Manages uProtocol listeners for incoming commands
+- Forwards retrieved sensor data via uProtocol-over-Zenoh
 
 ### 3. Traditional Zenoh Communication Layer
 
@@ -202,3 +268,9 @@ The application includes robust error handling for:
    - Verify control mode switching logic
    - Check message priority handling
    - Confirm proper listener registration
+
+4. **"Waiting for actor with role_name=<ROLE_NAME_HERE>..."**
+   - Have you given a different role_name for the sensor in `sdv_lab/carla-setup/examples/manual_control_sensors.py`?
+   - Have you made sure the sensor is "turned on"? Certain sensors are not turned on by default:
+      - To turn on the radar sensor, click on the pygame window and press `g`
+      - The configuration at present allows either camera or lidar; you can toggle which vision sensor is being used via `tab` until you arrive at the desired one. Or -- you could modify `manual_control_sensors.py` to have both on at the same time.
