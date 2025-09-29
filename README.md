@@ -2,16 +2,16 @@
 
 # SDV Lab
 
-Simulate a realistic, modular, and cyber-physical Software-Defined Vehicle (SDV) development environment where teams can design, implement, and demonstrate an SDV feature that
+Simulate a realistic, modular, and cyber-physical Software-Defined Vehicle (SDV) development environment where teams can design, implement and demonstrate an SDV feature that
 operates across a virtual platform.
 
-SDV Lab is a collection of examples about how to use Eclipse projects and other Open Source projects, such as CARLA and Android, to rapidly develop realistic vehicle features, and then simulate and test them in a virtual envirionment.
+SDV Lab is a collection of examples about how to use Eclipse projects and other Open Source projects, such as CARLA and Android, to rapidly develop realistic vehicle features, and then simulate and test them in a virtual environment.
 
 ![SDV Lab](https://github.com/Eclipse-SDV-Hackathon-Chapter-Three/sdv_lab/blob/main/assets/sdv_lab.png)
 
 ## SDV Lab Framework
 
-The SDV Lab repository is organized in folders, where you can find simple examples of components connected to implement unique vehicle funtions. Inside the folders will you find README files with technical details about each example.
+The SDV Lab repository is organized in folders, where you can find simple examples of components connected to implement unique vehicle funtions. Inside the folders you will find README files with technical details about each example.
 
 ![SW Componenents samples](https://github.com/Eclipse-SDV-Hackathon-Chapter-Three/sdv_lab/blob/main/assets/SW_Components.png)
 Each example is composed by 3 elements:
@@ -25,9 +25,9 @@ All Application Components and protocols bridges or brokers are conteinerized an
 
 ### Infrastructure
 
-For this event, each team will be provided with a dedicated Laptop (shared laptop) containing all the main SDV Lab components, which requires specific software and hardware configuration. Therefore, your main focus will be to develop applications to interact with those components.
+For this event, each team will be provided with a dedicated Notebook (shared notebook) containing all the main SDV Lab components, which requires specific software and hardware configuration. Therefore, your main focus will be to develop applications to interact with those components.
 ![Infra](https://github.com/Eclipse-SDV-Hackathon-Chapter-Three/sdv_lab/blob/main/assets/infra.png)
-Here is the list of applications provided by the Shared laptops:
+Here is the list of applications provided by the shared notebooks:
  - CARLA Simulator 0.9.15
  - Android Studio
  - MQTT Mosquitto Broker
@@ -46,8 +46,8 @@ You are free to choose any ADAS or AD functionality and bring it to life using E
 Create a  **functional prototype**  of an ADAS or AD feature that:
 -   Uses SDV Lab framework, but you are free to choose any other Eclipse or Open-source solution.
 -   Demonstrates innovation, usability, and integration.
--   Runs and test it in the simulated environment.
--   Deploy and automated your application by using Ankaios.
+-   Runs and tests in the simulated environment.
+-   Gets deployed and automated by using Ankaios.
 
 ### 💡 Inspiration: ADAS & AD Feature Ideas
 
@@ -119,7 +119,7 @@ The installation script will automatically create a systemd service file for the
 
 ### Shared Notebook
 
-As an participant you can ignore this section. The shared notebooks were already setup and this is only linked to reinstall the services if the shared notebook has some troubles.
+As participants you can ignore this section. The shared notebooks were already setup and this is only linked to reinstall the services if the shared notebook has some troubles.
 Look into the detailed [shared_notebooks.md](./shared_notebooks.md) about how to install the shared services on the shared notebooks from the hack coaches.
 
 ## Run
@@ -148,7 +148,7 @@ cd uprotocol/cruise-control-app
 ank apply cruise-control-app.yaml
 ```
 
-**Note:** If you want to remove all workloads specified in the Ankaios manifest for cleaning up you can simply add `-d` paramter to the `ank apply` like the following:
+**Note:** If you want to remove all workloads specified in the Ankaios manifest for cleaning up you can simply add `-d` parameter to the `ank apply` like the following:
 `ank apply -d cruise-control-app.yaml`. This might be helpful for incremental development, when you change the example code.
 
 ## Additional Ankaios commands
