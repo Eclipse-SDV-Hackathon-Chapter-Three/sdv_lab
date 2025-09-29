@@ -19,11 +19,13 @@
 
 ARG TARGETARCH
 FROM ghcr.io/rust-cross/rust-musl-cross:x86_64-musl AS builder-amd64
-ENV BUILDTARGET="x86_64-unknown-linux-musl"
-
+ARG BUILDTARGET="x86_64-unknown-linux-musl"
+ENV BUILDTARGET=$BUILDTARGET
 
 FROM ghcr.io/rust-cross/rust-musl-cross:aarch64-musl AS builder-arm64
-ENV BUILDTARGET="aarch64-unknown-linux-musl"
+ARG BUILDTARGET="aarch64-unknown-linux-musl"
+ENV BUILDTARGET=$BUILDTARGET
+
 
 FROM builder-$TARGETARCH AS builder
 RUN apt-get update && apt-get install -y ca-certificates \
@@ -40,7 +42,13 @@ WORKDIR /cruise-control-app
 COPY . /cruise-control-app
 
 RUN cargo build --release --target $BUILDTARGET
+RUN ls -l /cruise-control-app/target/$BUILDTARGET/release
+RUN cp /cruise-control-app/target/$BUILDTARGET/release/cruise-control-app /tmp/cruise-control-app
 
+FROM alpine:latest
+RUN apk --no-cache add ca-certificates
+COPY --from=builder /tmp/cruise-control-app /app/cruise-control-app
+RUN chmod +x /app/cruise-control-app
 ENV CRUISE_CONTROL_APP_MODE=mqtt5
 ENV RUST_LOG=debug
-ENTRYPOINT /cruise-control-app/target/${BUILDTARGET}/release/cruise-control-app ${CRUISE_CONTROL_APP_MODE}
+ENTRYPOINT /app/cruise-control-app ${CRUISE_CONTROL_APP_MODE}
