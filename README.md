@@ -73,6 +73,16 @@ The installation script will automatically create a systemd service file for the
 As an participant you can ignore this section. The shared notebooks were already setup and this is only linked to reinstall the services if the shared notebook has some troubles.
 Look into the detailed [shared_notebooks.md](./shared_notebooks.md) about how to install the shared services on the shared notebooks from the hack coaches.
 
+## If you're using Ubuntu 24.04
+
+Be sure to run the script in:
+
+```shell
+./clang-12-setup-for-ubuntu-24.04/setup-ubuntu-24.04-with-clang-12.sh
+```
+
+so that you're able to compile `ego-vehicle/uprotocol-sensors`.
+
 ## Run
 
 1. Start the required services on the shared notebook (CARLA, Ankaios cluster with communication service like MQTT, ...)
