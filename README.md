@@ -78,10 +78,14 @@ Look into the detailed [shared_notebooks.md](./shared_notebooks.md) about how to
 Be sure to run the script in:
 
 ```shell
-./clang-12-setup-for-ubuntu-24.04/setup-ubuntu-24.04-with-clang-12.sh
+./ego-vehicle/uprotocol-sensors/troubleshooting/setup-ubuntu-24.04-with-clang-12.sh
 ```
 
 so that you're able to compile `ego-vehicle/uprotocol-sensors`.
+
+## If using Ubuntu 22.04, but still hitting compilation errors
+
+Consult [`ego-vehicle/uprotocol-sensors/README.md`](./ego-vehicle/uprotocol-sensors/README.md).
 
 ## Run
 

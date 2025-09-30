@@ -4,17 +4,9 @@ A Rust-based ego vehicle controller for CARLA simulation that uses uProtocol-ove
 
 uProtocol-over-Zenoh is also used to forward the sensor data from CARLA over to an application you will write which operates with this data to create an Advanced Driver Assistance System (ADAS) / Automated Driving (AD) feature.
 
-## If you're using Ubuntu 24.04
+## Troubleshooting, if failing to compile
 
-Be sure to run the script in:
-
-```shell
-./clang-12-setup-for-ubuntu-24.04/setup-ubuntu-24.04-with-clang-12.sh
-```
-
-so that you can compile this project.
-
-tl;dr: The Rust binding to the CARLA Client API used in this program assumes clang-12 is available. The above script configures your environment correctly with clang-12 to be able to build this program.
+See [troubleshooting/README.md](./troubleshooting/README.md)
 
 ## Features
 
