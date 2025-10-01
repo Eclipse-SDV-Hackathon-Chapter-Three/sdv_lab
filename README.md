@@ -9,6 +9,64 @@ SDV Lab is a collection of examples about how to use Eclipse projects and other 
 
 ![SDV Lab](https://github.com/Eclipse-SDV-Hackathon-Chapter-Three/sdv_lab/blob/main/assets/sdv_lab.png)
 
+## ⚠️ Rust applications using uProtocol ⚠️
+
+### tl;dr, do the following:
+
+1 Modify your Cargo.toml like the following:
+
+```
+up-rust = { version = "=0.7.0" }
+```
+
+2 Run the following command on the command line, inside the folder for your Rust project:
+
+```shell
+cargo update -p up-rust --precise 0.7.0
+```
+
+3.a Run the following command on the command line, inside the folder for your Rust project:
+
+```shell
+cargo tree -p up-transport-zenoh
+```
+
+3.b Read through the output to confirm:
+
+that you should see `up-transport-zenoh` using `up-rust` at `0.7.0`, not `0.7.1`.
+
+4 When you commit to your own repo, ensure that you commit the lockfile changes:
+
+```shell
+git add Cargo.lock
+```
+
+### Why's this needed?
+
+The [up-rust](https://crates.io/crates/up-rust/versions) crate got updated in its `0.7.1` release to more faithfully implement the uProtocol spec, specifically how `UUri`s are handled. See [here](https://github.com/eclipse-uprotocol/up-spec/blob/main/basics/uri.adoc#3-mapping-to-uri) for more details if interested where it's specified on what is legal in a `UUri`'s authority component.
+
+The Rust build and packaging tool Cargo eagerly favors using newer releases.
+
+In this case what's happening is that if you specify in your Cargo.toml:
+
+```
+up-rust = { version = "0.7.0" }
+```
+
+this will be eagerly upgraded to use `0.7.1`.
+
+That's why we had step 1 up above.
+
+Next, [`up-transport-zenoh`](https://crates.io/crates/up-transport-zenoh/0.8.0/dependencies) has its dependency on `up-rust` specified in the default way:
+
+```
+up-rust = { version = "0.7.0" }
+```
+
+which means that it's also going to try to use `0.7.1`.
+
+By running the command in step 2 above we can also require all dependencies to use the `up-rust` release version `0.7.0`, including `up-transport-zenoh`.
+
 ## SDV Lab Framework
 
 The SDV Lab repository is organized in folders, where you can find simple examples of components connected to implement unique vehicle functions. Inside the folders will you find README files with technical details about each example.
