@@ -40,6 +40,7 @@ impl ImageListener {
 #[async_trait::async_trait]
 impl UListener for ImageListener {
     async fn on_receive(&self, msg: UMessage) {
+
         // if let Some(payload) = msg.payload {
         let Some(payload) = msg.payload.as_deref() else {
             return;
@@ -51,7 +52,7 @@ impl UListener for ImageListener {
         // Track received frames
         let received_frame_number = self.received_frame_count.fetch_add(1, Ordering::Relaxed) + 1;
         println!("Received image data payload of {} bytes (Received Frame #{})", payload.len(), received_frame_number);
-        
+
         // Use proper deserialization with ImageEventSerDe
         match serde_json::from_slice::<ImageEventSerDe>(&payload) {
             Ok(image_data) => {
@@ -199,7 +200,7 @@ async fn display_carla_image_from_raw(width: u32, height: u32, rgb_data: Vec<u8>
     
     let now = std::time::Instant::now();
     if now.duration_since(*last_log_guard) >= std::time::Duration::from_secs(FPS_LOG_INTERVAL_SECONDS) {
-        let start_guard = match image_listener.fps_start_time.lock() {
+        let mut start_guard = match image_listener.fps_start_time.lock() {
             Ok(guard) => guard,
             Err(poisoned) => {
                 eprintln!("Warning: FPS start time mutex was poisoned, recovering...");
@@ -211,9 +212,15 @@ async fn display_carla_image_from_raw(width: u32, height: u32, rgb_data: Vec<u8>
         let display_fps = frame_number as f64 / elapsed.as_secs_f64();
         let received_frames = image_listener.received_frame_count.load(Ordering::Relaxed);
         let receive_fps = received_frames as f64 / elapsed.as_secs_f64();
-        
+
         println!("FPS - Display: {:.2}, Receive: {:.2} (Display Frame #{}, Received Frame #{}, Elapsed: {:.2}s)", 
                  display_fps, receive_fps, frame_number, received_frames, elapsed.as_secs_f64());
+        
+        // Reset counters and start time for next interval
+        image_listener.frame_count.store(0, Ordering::Relaxed);
+        image_listener.received_frame_count.store(0, Ordering::Relaxed);
+        *start_guard = now;
+
         *last_log_guard = now;
     }
     
