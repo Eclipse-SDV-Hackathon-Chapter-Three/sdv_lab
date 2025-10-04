@@ -31,10 +31,13 @@ ndarray = { version = "=0.15.6", features = ["serde"] }
 pretty_env_logger = "0.4"
 serde = { version = "1.0" }
 serde_json = { version = "1" }
+show-image = "0.14"
+base64 = "0.21"
 tokio = { version = "1", features = ["full"] }
 up-rust = { version = "0.7.0" }
 up-transport-zenoh = { version = "0.8" }
 zenoh = { version = "1.0.0-rc.2" }
+
 
 [patch.crates-io]
 # point the carla crate at your fork/branch
