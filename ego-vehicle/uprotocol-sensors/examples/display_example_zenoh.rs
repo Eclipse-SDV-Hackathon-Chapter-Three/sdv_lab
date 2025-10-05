@@ -1,7 +1,8 @@
 // Example demonstrating image display functionality from Zenoh
 // This example shows how to receive and display CARLA sensor images from uProtocol/Zenoh
 
-use carla_data_serde::ImageEventSerDe;
+// use carla_data_serde::ImageEventSerDe;
+use carla::sensor::data::{Color};
 use show_image::WindowOptions;
 use std::sync::{Arc, OnceLock};
 use up_rust::{UTransport, UUri};
@@ -9,6 +10,8 @@ use up_rust::{UListener, UMessage};
 use up_transport_zenoh::UPTransportZenoh;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
+use std::mem;
+use carla::sensor::data::{Image as ImageEvent};
 
 
 // // Rate limiting for image display
@@ -37,6 +40,67 @@ impl ImageListener {
     }
 }
 
+// TODO: Borrowed, zero-copy serializer for Image
+
+use serde::{Deserialize, Serialize};
+use ndarray::{Array2, ArrayView1, ArrayView2};
+
+pub struct ImageEventSerBorrowed {
+    pub height: usize,
+    pub width: usize,
+    pub len: usize,
+    pub is_empty: bool,
+    pub fov_angle: f32,
+    // #[serde(with = "self::arrayview2_color_remote")]
+    // pub array: ArrayView2<'a, Color>,
+    pub array: Vec<u8>, // Flat RGB array: shape (height, width*4)
+}
+
+/// Owned, round-trip serializer for Image
+#[derive(Serialize, Deserialize)]
+pub struct ImageEventSerDe {
+    pub height: usize,
+    pub width: usize,
+    pub len: usize,
+    pub is_empty: bool,
+    pub fov_angle: f32,
+    pub array: Vec<u8>, // Flat RGB array: shape (height, width*4)
+    // pub array: ndarray::Array2<u8>, // Flat RGB array: shape (height, width*3)
+}
+
+impl From<ImageEventSerBorrowed> for ImageEventSerDe {
+    fn from(value: ImageEventSerBorrowed) -> Self {
+        // let height = value.height();
+        // let width = value.width();
+        // let view = value.as_array();
+
+        // // Create flat RGBA array
+        // let mut vec = Vec::with_capacity(view.len() * 4);
+        // for pixel in view.iter() {
+        //     vec.push(pixel.r); // Red
+        //     vec.push(pixel.g); // Green
+        //     vec.push(pixel.b); // Blue
+        //     vec.push(pixel.a); // Alpha
+        // }
+        // let array = ndarray::Array2::from_shape_vec((value.height, value.width), value.array).unwrap();
+
+        Self {
+            // height: value.height(),
+            // width: value.width(),
+            // len: value.len(),
+            // is_empty: value.is_empty(),
+            // fov_angle: value.fov_angle(),
+            // array,
+            height: value.height,
+            width: value.width,
+            len: value.len,
+            is_empty: value.is_empty,
+            fov_angle: value.fov_angle,
+            array: value.array, // owned, copied
+        }
+    }
+}
+
 #[async_trait::async_trait]
 impl UListener for ImageListener {
     async fn on_receive(&self, msg: UMessage) {
@@ -53,7 +117,7 @@ impl UListener for ImageListener {
         let received_frame_number = self.received_frame_count.fetch_add(1, Ordering::Relaxed) + 1;
         println!("Received image data payload of {} bytes (Received Frame #{})", payload.len(), received_frame_number);
 
-        // Use proper deserialization with ImageEventSerDe
+        // // Use proper deserialization with ImageEventSerDe
         match serde_json::from_slice::<ImageEventSerDe>(&payload) {
             Ok(image_data) => {
                 println!("Successfully deserialized ImageEventSerDe");
@@ -63,50 +127,12 @@ impl UListener for ImageListener {
                 
                 let width = image_data.width as u32;
                 let height = image_data.height as u32;
-                
-                // The array contains FfiColor structs in an ndarray format
-                let pixel_array = &image_data.array;
-                
-                println!("Pixel array shape: {:?}", pixel_array.shape());
-                println!("Array dimensions: height={}, width={}", pixel_array.nrows(), pixel_array.ncols());
-                
-                // Convert ndarray of FfiColor to RGB data
-                let mut rgb_data = Vec::with_capacity((width * height * 3) as usize);
-                let mut non_zero_count = 0;
-                
-                // Iterate through the 2D array
-                for row in 0..pixel_array.nrows() {
-                    for col in 0..pixel_array.ncols() {
-                        let pixel = &pixel_array[[row, col]];
-                        
-                        // FfiColor has fields: b, g, r, a
-                        let r = pixel.r;
-                        let g = pixel.g;
-                        let b = pixel.b;
-                        
-                        // Count non-zero pixels for debugging
-                        if r != 0 || g != 0 || b != 0 {
-                            non_zero_count += 1;
-                        }
-                        
-                        // Add RGB values (convert BGRA to RGB)
-                        rgb_data.push(r);
-                        rgb_data.push(g);
-                        rgb_data.push(b);
-                    }
-                }
-                
-                println!("Converted {} pixels to RGB data", pixel_array.len());
-                println!("Non-zero pixels: {} out of {}", non_zero_count, pixel_array.len());
-                
-                // Check first few RGB pixels for debugging
-                if rgb_data.len() >= 12 {
-                    println!("First 4 pixels RGB values: {:?}", &rgb_data[0..12]);
-                    
-                    // Check if image is all black
-                    let non_zero_rgb_count = rgb_data.iter().filter(|&&x| x != 0).count();
-                    println!("Non-zero RGB pixels: {} out of {}", non_zero_rgb_count, rgb_data.len());
-                }
+
+
+                // skip the alpha channel
+                let mut rgb_data = image_data.array.into_iter().enumerate()
+                    .filter_map(|(i, byte)| if (i + 1) % 4 != 0 { Some(byte) } else { None })
+                    .collect::<Vec<u8>>();
                 
                 // Ensure we have the right amount of data
                 let expected_size = (width * height * 3) as usize;
@@ -120,7 +146,7 @@ impl UListener for ImageListener {
                     width, 
                     height, 
                     rgb_data, 
-                    "CARLA Image from Zenoh",
+                    "CARLA Image from uProtocol over Zenoh Rust",
                     self
                 ).await {
                     eprintln!("Failed to display image: {}", e);
