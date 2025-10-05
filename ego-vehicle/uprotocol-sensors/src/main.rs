@@ -34,6 +34,7 @@ use ego_vehicle::sensors::{
 };
 use log;
 use serde_json;
+use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -131,6 +132,45 @@ impl UListener for EngageListener {
             let mut data = self.data.lock().unwrap();
             *data = Some(value);
             // Lock is released when data goes out of scope
+        }
+    }
+}
+
+/// TODO: Borrowed, zero-copy serializer for Image
+#[derive(Serialize)]
+pub struct ImageEventVecSer {
+    pub height: usize,
+    pub width: usize,
+    pub len: usize,
+    pub is_empty: bool,
+    pub fov_angle: f32,
+    // #[serde(with = "self::arrayview2_color_remote")]
+    // pub array: ArrayView2<'a, Color>,
+    pub array: Vec<u8>, // Flat RGB array: shape (height, width*4)
+}
+
+impl<'a> From<&'a ImageEvent> for ImageEventVecSer {
+    fn from(value: &'a ImageEvent) -> Self {
+        let height = value.height();
+        let width = value.width();
+        let view = value.as_array();
+        
+        // Create flat RGB array
+        let mut array = Vec::with_capacity(view.len() * 4);
+        for pixel in view.iter() {
+            array.push(pixel.r); // Red
+            array.push(pixel.g); // Green  
+            array.push(pixel.b); // Blue
+            array.push(pixel.a); // Alpha
+        }
+        Self {
+            height: value.height(),
+            width: value.width(),
+            len: value.len(),
+            is_empty: value.is_empty(),
+            fov_angle: value.fov_angle(),
+            // array: value.as_array(), // borrow, zero-copy
+            array, // owned, copied
         }
     }
 }
@@ -490,7 +530,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             // Encoder: ImageEvent -> Vec<u8> (borrow-only)
             let encode = |evt: ImageEvent| {
                 // Borrow the event so the payload can serialize without copying the image buffer
-                let serde_evt: ImageEventSerBorrowed<'_> = (&evt).into();
+                let serde_evt: ImageEventVecSer = (&evt).into();
                 serde_json::to_vec(&serde_evt)
                     .map_err(|e| -> Box<dyn std::error::Error + Send + Sync> { Box::new(e) })
             };
